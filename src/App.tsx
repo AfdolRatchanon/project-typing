@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight } from 'lucide-react';
 import './App.css'
 // Define types for better type safety and code readability
 interface Level {
   id: string;
   name: string;
   text: string;
+}
+
+interface Unit {
+  id: string;
+  name: string;
+  levels: Level[];
+}
+
+interface Language {
+  id: string;
+  name: string;
+  units: Unit[];
 }
 
 interface ScoringCriteria {
@@ -18,61 +31,221 @@ interface LevelScoring {
   [levelId: string]: ScoringCriteria[];
 }
 
-// --- Data for Levels and Scoring Criteria ---
-// สามารถเพิ่มหรือแก้ไขข้อมูลด่านและเกณฑ์การให้คะแนนได้ที่นี่
-const levels: Level[] = [
+// --- Data for Languages, Units, Levels and Scoring Criteria ---
+const languages: Language[] = [
   {
-    id: 'level-1',
-    name: 'ด่าน 1: ประโยคง่ายๆ',
-    text: 'การฝึกพิมพ์ดีดเป็นสิ่งสำคัญในการทำงานยุคใหม่',
+    id: 'thai',
+    name: 'ภาษาไทย',
+    units: [
+      {
+        id: 'thai-basic',
+        name: 'หน่วยที่ 1: พื้นฐาน',
+        levels: [
+          {
+            id: 'thai-basic-1',
+            name: 'ด่าน 1: แป้นเหย้าไทย',
+            text: 'ฟ ห ก ด เ ้ ่ า ส ว ง',
+          },
+          {
+            id: 'thai-basic-2',
+            name: 'ด่าน 2: แถวบน',
+            text: 'ๆ ไ ำ พ ะ ั ี ร น ย บ ล',
+          },
+          {
+            id: 'thai-basic-3',
+            name: 'ด่าน 3: แถวล่าง',
+            text: 'ผ ป แ อ ิ ื ท ม ใ ฝ',
+          },
+        ]
+      },
+      {
+        id: 'thai-words',
+        name: 'หน่วยที่ 2: คำศัพท์',
+        levels: [
+          {
+            id: 'thai-words-1',
+            name: 'ด่าน 1: คำง่าย',
+            text: 'การ คาร คิด คำ ใจ ใส ใน ใหม่ ได้ ดี',
+          },
+          {
+            id: 'thai-words-2',
+            name: 'ด่าน 2: คำยาว',
+            text: 'มาก มี แม้ ยัง ระ รัก ลง วัน สี หา',
+          },
+        ]
+      },
+      {
+        id: 'thai-sentences',
+        name: 'หน่วยที่ 3: ประโยค',
+        levels: [
+          {
+            id: 'thai-sentences-1',
+            name: 'ด่าน 1: ประโยคง่าย',
+            text: 'การฝึกพิมพ์ดีดเป็นสิ่งสำคัญในการทำงานยุคใหม่',
+          },
+          {
+            id: 'thai-sentences-2',
+            name: 'ด่าน 2: ประโยคยาว',
+            text: 'ความเร็วและความแม่นยำในการพิมพ์จะช่วยเพิ่มประสิทธิภาพในการทำงานของคุณได้อย่างมาก การฝึกฝนอย่างสม่ำเสมอจะนำไปสู่ความสำเร็จ',
+          },
+        ]
+      },
+      {
+        id: 'thai-advanced',
+        name: 'หน่วยที่ 4: ขั้นสูง',
+        levels: [
+          {
+            id: 'thai-advanced-1',
+            name: 'ด่าน 1: ตัวเลขและสัญลักษณ์',
+            text: 'ราคาของสินค้าคือ $123.45 และมีส่วนลด 10% เหลือเพียง 111.10 บาท! รหัสสินค้า #ABC-789.',
+          },
+        ]
+      }
+    ]
   },
   {
-    id: 'level-2',
-    name: 'ด่าน 2: ข้อความยาวขึ้น',
-    text: 'ความเร็วและความแม่นยำในการพิมพ์จะช่วยเพิ่มประสิทธิภาพในการทำงานของคุณได้อย่างมาก การฝึกฝนอย่างสม่ำเสมอจะนำไปสู่ความสำเร็จ',
-  },
-  {
-    id: 'level-3',
-    name: 'ด่าน 3: ตัวเลขและสัญลักษณ์',
-    text: 'ราคาของสินค้าคือ $123.45 และมีส่วนลด 10% เหลือเพียง 111.10 บาท! รหัสสินค้า #ABC-789.',
-  },
-  {
-    id: 'level-4',
-    name: 'ด่าน 4: ภาษาอังกฤษ',
-    text: 'The quick brown fox jumps over the lazy dog. Practice makes perfect and consistency is key to improvement.',
-  },
-  { // New Level: Thai Home Row
-    id: 'level-5',
-    name: 'ด่าน 5: แป้นเหย้าภาษาไทย',
-    text: 'ฟ ห ก ด ่ า ส ว',
-  },
+    id: 'english',
+    name: 'English',
+    units: [
+      {
+        id: 'english-basic',
+        name: 'Unit 1: Basic',
+        levels: [
+          {
+            id: 'english-basic-1',
+            name: 'Level 1: Home Row',
+            text: 'a s d f g h j k l',
+          },
+          {
+            id: 'english-basic-2',
+            name: 'Level 2: Top Row',
+            text: 'q w e r t y u i o p',
+          },
+          {
+            id: 'english-basic-3',
+            name: 'Level 3: Bottom Row',
+            text: 'z x c v b n m',
+          },
+        ]
+      },
+      {
+        id: 'english-words',
+        name: 'Unit 2: Words',
+        levels: [
+          {
+            id: 'english-words-1',
+            name: 'Level 1: Simple Words',
+            text: 'the and for are but not you all can had her was one our',
+          },
+          {
+            id: 'english-words-2',
+            name: 'Level 2: Common Words',
+            text: 'about after again against because before being between during',
+          },
+        ]
+      },
+      {
+        id: 'english-sentences',
+        name: 'Unit 3: Sentences',
+        levels: [
+          {
+            id: 'english-sentences-1',
+            name: 'Level 1: Simple Sentences',
+            text: 'The quick brown fox jumps over the lazy dog.',
+          },
+          {
+            id: 'english-sentences-2',
+            name: 'Level 2: Complex Sentences',
+            text: 'Practice makes perfect and consistency is key to improvement. The quick brown fox jumps over the lazy dog.',
+          },
+        ]
+      }
+    ]
+  }
 ];
 
 const scoringCriteria: LevelScoring = {
-  'level-1': [
+  // Thai Basic
+  'thai-basic-1': [
+    { minWPM: 20, minAccuracy: 95, maxErrors: 2, grade: 'ยอดเยี่ยม!' },
+    { minWPM: 15, minAccuracy: 90, maxErrors: 4, grade: 'ดีมาก' },
+    { minWPM: 10, minAccuracy: 85, maxErrors: 6, grade: 'พอใช้' },
+  ],
+  'thai-basic-2': [
+    { minWPM: 25, minAccuracy: 95, maxErrors: 2, grade: 'ยอดเยี่ยม!' },
+    { minWPM: 20, minAccuracy: 90, maxErrors: 4, grade: 'ดีมาก' },
+    { minWPM: 15, minAccuracy: 85, maxErrors: 6, grade: 'พอใช้' },
+  ],
+  'thai-basic-3': [
+    { minWPM: 25, minAccuracy: 95, maxErrors: 2, grade: 'ยอดเยี่ยม!' },
+    { minWPM: 20, minAccuracy: 90, maxErrors: 4, grade: 'ดีมาก' },
+    { minWPM: 15, minAccuracy: 85, maxErrors: 6, grade: 'พอใช้' },
+  ],
+  // Thai Words
+  'thai-words-1': [
+    { minWPM: 30, minAccuracy: 95, maxErrors: 3, grade: 'ยอดเยี่ยม!' },
+    { minWPM: 25, minAccuracy: 90, maxErrors: 5, grade: 'ดีมาก' },
+    { minWPM: 20, minAccuracy: 85, maxErrors: 7, grade: 'พอใช้' },
+  ],
+  'thai-words-2': [
+    { minWPM: 30, minAccuracy: 95, maxErrors: 3, grade: 'ยอดเยี่ยม!' },
+    { minWPM: 25, minAccuracy: 90, maxErrors: 5, grade: 'ดีมาก' },
+    { minWPM: 20, minAccuracy: 85, maxErrors: 7, grade: 'พอใช้' },
+  ],
+  // Thai Sentences
+  'thai-sentences-1': [
     { minWPM: 40, minAccuracy: 98, maxErrors: 2, grade: 'ยอดเยี่ยม!' },
     { minWPM: 30, minAccuracy: 95, maxErrors: 5, grade: 'ดีมาก' },
     { minWPM: 20, minAccuracy: 90, maxErrors: 8, grade: 'พอใช้' },
   ],
-  'level-2': [
+  'thai-sentences-2': [
     { minWPM: 50, minAccuracy: 98, maxErrors: 3, grade: 'ยอดเยี่ยม!' },
     { minWPM: 40, minAccuracy: 95, maxErrors: 7, grade: 'ดีมาก' },
     { minWPM: 30, minAccuracy: 90, maxErrors: 10, grade: 'พอใช้' },
   ],
-  'level-3': [
+  // Thai Advanced
+  'thai-advanced-1': [
     { minWPM: 35, minAccuracy: 97, maxErrors: 3, grade: 'ยอดเยี่ยม!' },
     { minWPM: 25, minAccuracy: 93, maxErrors: 6, grade: 'ดีมาก' },
     { minWPM: 15, minAccuracy: 88, maxErrors: 9, grade: 'พอใช้' },
   ],
-  'level-4': [
-    { minWPM: 60, minAccuracy: 99, maxErrors: 1, grade: 'ยอดเยี่ยม!' },
-    { minWPM: 50, minAccuracy: 97, maxErrors: 4, grade: 'ดีมาก' },
-    { minWPM: 40, minAccuracy: 92, maxErrors: 7, grade: 'พอใช้' },
+  // English Basic
+  'english-basic-1': [
+    { minWPM: 20, minAccuracy: 95, maxErrors: 2, grade: 'Excellent!' },
+    { minWPM: 15, minAccuracy: 90, maxErrors: 4, grade: 'Good' },
+    { minWPM: 10, minAccuracy: 85, maxErrors: 6, grade: 'Fair' },
   ],
-  'level-5': [ // Scoring for Thai Home Row
-    { minWPM: 30, minAccuracy: 98, maxErrors: 1, grade: 'ยอดเยี่ยม!' },
-    { minWPM: 20, minAccuracy: 95, maxErrors: 2, grade: 'ดีมาก' },
-    { minWPM: 10, minAccuracy: 90, maxErrors: 3, grade: 'พอใช้' },
+  'english-basic-2': [
+    { minWPM: 25, minAccuracy: 95, maxErrors: 2, grade: 'Excellent!' },
+    { minWPM: 20, minAccuracy: 90, maxErrors: 4, grade: 'Good' },
+    { minWPM: 15, minAccuracy: 85, maxErrors: 6, grade: 'Fair' },
+  ],
+  'english-basic-3': [
+    { minWPM: 25, minAccuracy: 95, maxErrors: 2, grade: 'Excellent!' },
+    { minWPM: 20, minAccuracy: 90, maxErrors: 4, grade: 'Good' },
+    { minWPM: 15, minAccuracy: 85, maxErrors: 6, grade: 'Fair' },
+  ],
+  // English Words
+  'english-words-1': [
+    { minWPM: 35, minAccuracy: 95, maxErrors: 3, grade: 'Excellent!' },
+    { minWPM: 30, minAccuracy: 90, maxErrors: 5, grade: 'Good' },
+    { minWPM: 25, minAccuracy: 85, maxErrors: 7, grade: 'Fair' },
+  ],
+  'english-words-2': [
+    { minWPM: 40, minAccuracy: 95, maxErrors: 3, grade: 'Excellent!' },
+    { minWPM: 35, minAccuracy: 90, maxErrors: 5, grade: 'Good' },
+    { minWPM: 30, minAccuracy: 85, maxErrors: 7, grade: 'Fair' },
+  ],
+  // English Sentences
+  'english-sentences-1': [
+    { minWPM: 50, minAccuracy: 98, maxErrors: 2, grade: 'Excellent!' },
+    { minWPM: 40, minAccuracy: 95, maxErrors: 4, grade: 'Good' },
+    { minWPM: 30, minAccuracy: 90, maxErrors: 6, grade: 'Fair' },
+  ],
+  'english-sentences-2': [
+    { minWPM: 60, minAccuracy: 99, maxErrors: 1, grade: 'Excellent!' },
+    { minWPM: 50, minAccuracy: 97, maxErrors: 4, grade: 'Good' },
+    { minWPM: 40, minAccuracy: 92, maxErrors: 7, grade: 'Fair' },
   ],
 };
 
@@ -81,8 +254,8 @@ const keyboardRows = [
   ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
   ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
   ['CapsLock', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", 'Enter'],
-  ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'Shift'],
-  ['Ctrl', 'Alt', 'Space', 'AltGr', 'Ctrl'],
+  ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'ShiftRight'],
+  ['Control', 'Alt', 'Space', 'AltGr', 'ControlRight'],
 ];
 
 // Define key displays for English and Thai layouts
@@ -103,7 +276,7 @@ const keyDisplays = {
       'Space': ' ',
     }
   },
-  th: { // Thai Kedmanee Layout (ปรับปรุงใหม่ตามคำขอ)
+  th: {
     unshifted: {
       '`': '_', '1': 'ๅ', '2': '/', '3': '-', '4': 'ภ', '5': 'ถ', '6': 'ุ', '7': 'ึ', '8': 'ค', '9': 'ต', '0': 'จ', '-': 'ข', '=': 'ช',
       'q': 'ๆ', 'w': 'ไ', 'e': 'ำ', 'r': 'พ', 't': 'ะ', 'y': 'ั', 'u': 'ี', 'i': 'ร', 'o': 'น', 'p': 'ย', '[': 'บ', ']': 'ล', '\\': 'ฃ',
@@ -122,7 +295,6 @@ const keyDisplays = {
 };
 
 // Reverse map for finding key from character (for highlighting)
-// This function dynamically creates the charToKeyLabelMap based on the current language and shift state.
 const getCharToKeyLabelMap = (lang: 'en' | 'th', shifted: boolean): { [char: string]: string } => {
   const map: { [char: string]: string } = {};
   const currentLayout = keyDisplays[lang][shifted ? 'shifted' : 'unshifted'];
@@ -146,8 +318,8 @@ const keyToFingerMap: { [key: string]: string } = {
   '9': 'rightRing', 'o': 'rightRing', 'l': 'rightRing', '.': 'rightRing',
   '0': 'rightPinky', '-': 'rightPinky', '=': 'rightPinky', 'p': 'rightPinky', '[': 'rightPinky', ']': 'rightPinky', '\\': 'rightPinky', ';': 'rightPinky', "'": 'rightPinky', '/': 'rightPinky', 'Backspace': 'rightPinky', 'Enter': 'rightPinky', 'ShiftRight': 'rightPinky', 'ControlRight': 'rightPinky',
   'Space': 'thumb',
-  'Alt': 'leftThumb', // Assuming left Alt
-  'AltGr': 'rightThumb', // Assuming right Alt/AltGr
+  'Alt': 'leftThumb',
+  'AltGr': 'rightThumb',
 };
 
 // Finger names for display
@@ -167,7 +339,6 @@ const fingerNamesDisplay: { [key: string]: string } = {
 
 // Helper function to segment text into displayable lines/chunks
 const segmentText = (text: string, maxCharsPerLine: number = 70): string[] => {
-  // Normalize multiple spaces to single space and trim
   const normalizedText = text.replace(/\s+/g, ' ').trim();
   const words = normalizedText.split(' ');
   const lines: string[] = [];
@@ -175,15 +346,14 @@ const segmentText = (text: string, maxCharsPerLine: number = 70): string[] => {
 
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
-    // If it's the first word of a new line, don't add a leading space
     const potentialNewLine = currentLine ? (currentLine + ' ' + word) : word;
     if (potentialNewLine.length <= maxCharsPerLine) {
       currentLine = potentialNewLine;
     } else {
-      if (currentLine) { // Push the current line if it's not empty
+      if (currentLine) {
         lines.push(currentLine);
       }
-      currentLine = word; // Start a new line with the current word
+      currentLine = word;
     }
   }
   if (currentLine) {
@@ -195,44 +365,54 @@ const segmentText = (text: string, maxCharsPerLine: number = 70): string[] => {
 // --- Main App Component ---
 const App: React.FC = () => {
   // State variables for the typing game
-  const [currentLevelId, setCurrentLevelId] = useState<string>(levels[0].id); // ID ของด่านปัจจุบัน
-  const [fullTextContent, setFullTextContent] = useState<string>(levels[0].text); // Original full text
-  const [segments, setSegments] = useState<string[]>([]); // Text broken into segments
-  const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number>(0); // Index of current segment
-  const [textToType, setTextToType] = useState<string>(''); // Current segment to type
-  const [typedText, setTypedText] = useState<string>(''); // Text typed for current segment
+  const [currentLevelId, setCurrentLevelId] = useState<string>(languages[0].units[0].levels[0].id);
+  const [fullTextContent, setFullTextContent] = useState<string>(languages[0].units[0].levels[0].text);
+  const [segments, setSegments] = useState<string[]>([]);
+  const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number>(0);
+  const [textToType, setTextToType] = useState<string>('');
+  const [typedText, setTypedText] = useState<string>('');
 
-  const [startTime, setStartTime] = useState<number | null>(null); // Game start time
-  const [endTime, setEndTime] = useState<number | null>(null); // Game end time
-  const [timer, setTimer] = useState<number>(0); // Display timer
+  const [startTime, setStartTime] = useState<number | null>(null);
+  const [timer, setTimer] = useState<number>(0);
 
-  const [totalErrors, setTotalErrors] = useState<number>(0); // Cumulative errors across all segments
-  const [totalCorrectChars, setTotalCorrectChars] = useState<number>(0); // Cumulative correct characters
-  const [totalTypedChars, setTotalTypedChars] = useState<number>(0); // Cumulative typed characters
+  const [totalErrors, setTotalErrors] = useState<number>(0);
+  const [totalCorrectChars, setTotalCorrectChars] = useState<number>(0);
+  const [totalTypedChars, setTotalTypedChars] = useState<number>(0);
 
-  const [isStarted, setIsStarted] = useState<boolean>(false); // Game started status
-  const [isFinished, setIsFinished] = useState<boolean>(false); // Game finished status
+  const [isStarted, setIsStarted] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const [isFinished, setIsFinished] = useState<boolean>(false);
 
-  const [wpm, setWpm] = useState<number>(0); // Words Per Minute
-  const [cpm, setCpm] = useState<number>(0); // Characters Per Minute
-  const [accuracy, setAccuracy] = useState<number>(0); // Accuracy
+  const [wpm, setWpm] = useState<number>(0);
+  const [accuracy, setAccuracy] = useState<number>(0);
 
-  const intervalRef = useRef<NodeJS.Timeout | null>(null); // Ref for timer interval
-  const inputRef = useRef<HTMLTextAreaElement>(null); // Ref for input field
+  const intervalRef = useRef<number | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // State for Keyboard and Finger Guidance
-  const [nextChar, setNextChar] = useState<string>(''); // Next character to type
-  const [activeFinger, setActiveFinger] = useState<string | null>(null); // Finger to use
-  const [highlightedKeys, setHighlightedKeys] = useState<string[]>([]); // Keys to highlight on virtual keyboard
-  const [keyboardLanguage, setKeyboardLanguage] = useState<'en' | 'th'>('en'); // Virtual keyboard language
-  const [isShiftActive, setIsShiftActive] = useState<boolean>(false); // Physical Shift key status
-  const [isCapsLockActive, setIsCapsLockActive] = useState<boolean>(false); // Physical CapsLock key status
+  const [nextChar, setNextChar] = useState<string>('');
+  const [activeFinger, setActiveFinger] = useState<string | null>(null);
+  const [highlightedKeys, setHighlightedKeys] = useState<string[]>([]);
+  const [keyboardLanguage, setKeyboardLanguage] = useState<'en' | 'th'>('en');
+  const [isShiftActive, setIsShiftActive] = useState<boolean>(false);
+  const [isCapsLockActive, setIsCapsLockActive] = useState<boolean>(false);
+
+  // State for collapsible menu
+  const [expandedLanguage, setExpandedLanguage] = useState<string>('thai');
+  const [expandedUnits, setExpandedUnits] = useState<{ [key: string]: boolean }>({
+    'thai-basic': true
+  });
 
   // Effect hook to update fullTextContent when currentLevelId changes
   useEffect(() => {
-    const selectedLevel = levels.find(level => level.id === currentLevelId);
-    if (selectedLevel) {
-      setFullTextContent(selectedLevel.text);
+    for (const language of languages) {
+      for (const unit of language.units) {
+        const selectedLevel = unit.levels.find(level => level.id === currentLevelId);
+        if (selectedLevel) {
+          setFullTextContent(selectedLevel.text);
+          return;
+        }
+      }
     }
   }, [currentLevelId]);
 
@@ -242,15 +422,15 @@ const App: React.FC = () => {
       const newSegments = segmentText(fullTextContent);
       setSegments(newSegments);
       setCurrentSegmentIndex(0);
-      setTextToType(newSegments[0] || ''); // Set the first segment as textToType
-      resetGameStates(); // Reset all game-related states
+      setTextToType(newSegments[0] || '');
+      resetGameStates();
     }
   }, [fullTextContent]);
 
   // Effect hook for the timer
   useEffect(() => {
-    if (isStarted && !isFinished) {
-      intervalRef.current = setInterval(() => {
+    if (isStarted && !isPaused && !isFinished) {
+      intervalRef.current = window.setInterval(() => {
         setTimer(prevTimer => prevTimer + 1);
       }, 1000);
     } else if (intervalRef.current) {
@@ -262,7 +442,7 @@ const App: React.FC = () => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [isStarted, isFinished]);
+  }, [isStarted, isPaused, isFinished]);
 
   // Event listeners for physical keyboard Shift/CapsLock state
   useEffect(() => {
@@ -270,7 +450,6 @@ const App: React.FC = () => {
       if (e.key === 'Shift') {
         setIsShiftActive(true);
       } else if (e.key === 'CapsLock') {
-        // We get the state directly from the event to avoid sync issues
         setIsCapsLockActive(e.getModifierState('CapsLock'));
       }
     };
@@ -292,8 +471,6 @@ const App: React.FC = () => {
     };
   }, []);
 
-  // --- START: REFACTORED AND FIXED SECTION ---
-
   // useMemo to calculate all typing guidance values in one place for efficiency.
   const typingGuidance = useMemo(() => {
     const char = textToType[typedText.length];
@@ -302,7 +479,7 @@ const App: React.FC = () => {
         char: '',
         keysToHighlight: [],
         baseKey: null,
-        language: keyboardLanguage, // Keep last language
+        language: keyboardLanguage,
       };
     }
 
@@ -312,11 +489,9 @@ const App: React.FC = () => {
     let baseKey: string | undefined;
     let needsShift = false;
 
-    // 1. Try to find the character in the unshifted layout
     const unshiftedCharToKeyMap = getCharToKeyLabelMap(detectedLanguage, false);
     baseKey = unshiftedCharToKeyMap[char];
 
-    // 2. If not found, check the shifted layout
     if (!baseKey) {
       const shiftedCharToKeyMap = getCharToKeyLabelMap(detectedLanguage, true);
       baseKey = shiftedCharToKeyMap[char];
@@ -329,15 +504,9 @@ const App: React.FC = () => {
     if (baseKey) {
       keysToHighlight.push(baseKey);
 
-      // Handle Shift highlighting
-      // This logic determines if the 'Shift' key needs to be visually pressed.
       const isCharUpperCase = detectedLanguage === 'en' && char.match(/[A-Z]/);
       const isSymbolRequiringShift = needsShift;
 
-      // Highlight Shift if:
-      // 1. It's a symbol that requires shift (e.g., '!' from '1').
-      // 2. It's an uppercase letter AND CapsLock is OFF.
-      // 3. It's a lowercase letter AND CapsLock is ON.
       if (isSymbolRequiringShift || (isCharUpperCase && !isCapsLockActive) || (!isCharUpperCase && isCapsLockActive && char.match(/[a-z]/i))) {
         keysToHighlight.push('Shift');
       }
@@ -349,10 +518,8 @@ const App: React.FC = () => {
       baseKey: baseKey || null,
       language: detectedLanguage,
     };
-  }, [textToType, typedText, isCapsLockActive]);
+  }, [textToType, typedText, isCapsLockActive, keyboardLanguage]);
 
-  // useEffect to update state based on the calculated guidance.
-  // This separates calculation (useMemo) from side effects (useEffect).
   useEffect(() => {
     setNextChar(typingGuidance.char);
     setHighlightedKeys(typingGuidance.keysToHighlight);
@@ -360,42 +527,29 @@ const App: React.FC = () => {
     setKeyboardLanguage(typingGuidance.language);
   }, [typingGuidance]);
 
-  // --- END: REFACTORED AND FIXED SECTION ---
-
-  // Function to calculate WPM (Words Per Minute)
   const calculateWPM = useCallback((correctChars: number, timeInSeconds: number): number => {
     if (timeInSeconds === 0) return 0;
-    // Standard WPM calculation: (characters / 5) / minutes
     const words = correctChars / 5;
     const minutes = timeInSeconds / 60;
     return Math.round(words / minutes);
   }, []);
 
-  // Function to calculate CPM (Characters Per Minute)
-  const calculateCPM = useCallback((correctChars: number, timeInSeconds: number): number => {
-    if (timeInSeconds === 0) return 0;
-    const minutes = timeInSeconds / 60;
-    return Math.round(correctChars / minutes);
-  }, []);
-
-  // Function to calculate Accuracy
   const calculateAccuracy = useCallback((correctChars: number, totalChars: number): number => {
     if (totalChars === 0) return 0;
     return Math.round((correctChars / totalChars) * 100);
   }, []);
 
-  // Handle user input
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
 
-
-    // Start the timer when the first character is typed
     if (!isStarted && value.length > 0) {
       setIsStarted(true);
+      setIsPaused(false);
       setStartTime(Date.now());
     }
 
-    // Calculate errors for the current segment
+    if (isPaused) return;
+
     let currentSegmentErrors = 0;
     let currentSegmentCorrectChars = 0;
 
@@ -409,9 +563,7 @@ const App: React.FC = () => {
 
     setTypedText(value);
 
-    // Check if the current segment is finished
     if (value.length >= textToType.length) {
-      // Finalize stats for this segment
       const finalCorrectCharsForSegment = textToType.split('').reduce((acc, char, index) => {
         return acc + (value[index] === char ? 1 : 0);
       }, 0);
@@ -425,49 +577,73 @@ const App: React.FC = () => {
       setTotalTypedChars(newTotalTypedChars);
       setTotalErrors(newTotalErrors);
 
-      // Move to the next segment or finish the game
       if (currentSegmentIndex + 1 < segments.length) {
         setCurrentSegmentIndex(prev => prev + 1);
         setTextToType(segments[currentSegmentIndex + 1]);
-        setTypedText(''); // Reset typed text for the new segment
+        setTypedText('');
       } else {
-        // All segments finished
         const finalEndTime = Date.now();
         setIsFinished(true);
         setIsStarted(false);
-        setEndTime(finalEndTime);
+        setIsPaused(false);
 
         const timeTaken = (finalEndTime - (startTime || finalEndTime)) / 1000;
         setWpm(calculateWPM(newTotalCorrectChars, timeTaken));
-        setCpm(calculateCPM(newTotalCorrectChars, timeTaken));
         setAccuracy(calculateAccuracy(newTotalCorrectChars, newTotalTypedChars));
       }
     }
   };
 
-  // Function to reset all game-related states
   const resetGameStates = () => {
     setTypedText('');
     setStartTime(null);
-    setEndTime(null);
     setTimer(0);
     setTotalErrors(0);
     setTotalCorrectChars(0);
     setTotalTypedChars(0);
     setIsStarted(false);
+    setIsPaused(false);
     setIsFinished(false);
     setWpm(0);
-    setCpm(0);
     setAccuracy(0);
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
+    setCurrentSegmentIndex(0);
     if (inputRef.current) {
-      inputRef.current.focus(); // Focus the input field on reset
+      inputRef.current.focus();
     }
   };
 
-  // Function to get the grade based on current stats and level criteria
+  const handleResetGame = () => {
+    for (const language of languages) {
+      for (const unit of language.units) {
+        const selectedLevel = unit.levels.find(l => l.id === currentLevelId);
+        if (selectedLevel) {
+          const newSegments = segmentText(selectedLevel.text);
+          setSegments(newSegments);
+          setTextToType(newSegments[0] || '');
+          resetGameStates();
+          return;
+        }
+      }
+    }
+  };
+
+  const handleStartPause = () => {
+    if (!isStarted) {
+      setIsStarted(true);
+      setIsPaused(false);
+      setStartTime(Date.now());
+      if (inputRef.current) {
+        inputRef.current.focus();
+      }
+    } else {
+      setIsPaused(!isPaused);
+    }
+  };
+
   const getGrade = useCallback((): string => {
     if (!isFinished) return '-';
     const currentLevelCriteria = scoringCriteria[currentLevelId];
@@ -481,12 +657,11 @@ const App: React.FC = () => {
     return 'ต้องฝึกเพิ่ม';
   }, [currentLevelId, wpm, accuracy, totalErrors, isFinished]);
 
-  // Helper to render text with correct/incorrect highlighting
   const renderTextToType = () => {
     return textToType.split('').map((char, index) => {
-      let colorClass = 'text-gray-700'; // Default color for upcoming text
+      let colorClass = 'text-gray-700';
       if (index < typedText.length) {
-        colorClass = typedText[index] === char ? 'text-green-600' : 'text-red-600 line-through'; // Correct or Incorrect
+        colorClass = typedText[index] === char ? 'text-green-600' : 'text-red-600 line-through';
       }
       return (
         <span key={index} className={`${colorClass} ${index === typedText.length ? 'border-b-2 border-blue-500 animate-pulse' : ''}`}>
@@ -496,57 +671,207 @@ const App: React.FC = () => {
     });
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center p-4 font-inter">
-      <div className="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-4xl border border-gray-200">
-        <h1 className="text-4xl font-extrabold text-center text-gray-800 mb-6">
-          <span className="text-blue-600">React</span> Typing Trainer
-        </h1>
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
 
-        {/* Level Selection */}
-        <div className="mb-6 flex flex-col sm:flex-row items-center justify-between bg-gray-50 p-4 rounded-xl border border-gray-100">
-          <label htmlFor="level-select" className="text-lg font-semibold text-gray-700 mb-2 sm:mb-0 sm:mr-4">
-            เลือกด่าน:
-          </label>
-          <select
-            id="level-select"
-            className="flex-grow p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500 transition duration-200 ease-in-out bg-white text-gray-800"
-            value={currentLevelId}
-            onChange={(e) => setCurrentLevelId(e.target.value)}
-            disabled={isStarted}
-          >
-            {levels.map((level) => (
-              <option key={level.id} value={level.id}>
-                {level.name}
-              </option>
-            ))}
-          </select>
+  const toggleUnit = (unitId: string) => {
+    setExpandedUnits(prev => ({
+      ...prev,
+      [unitId]: !prev[unitId]
+    }));
+  };
+
+  const getCurrentLevel = () => {
+    for (const language of languages) {
+      for (const unit of language.units) {
+        const level = unit.levels.find(l => l.id === currentLevelId);
+        if (level) return level;
+      }
+    }
+    return null;
+  };
+
+  const currentLevel = getCurrentLevel();
+  const completedChars = typedText.length + (currentSegmentIndex * (segments[0]?.length || 0));
+  const totalChars = fullTextContent.length;
+  const progress = totalChars > 0 ? (completedChars / totalChars) * 100 : 0;
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex flex-col lg:flex-row p-2 sm:p-4 font-inter gap-3 lg:gap-6">
+      {/* Aside Menu for Level Selection */}
+      <aside className="bg-white rounded-xl lg:rounded-2xl shadow-2xl w-full lg:w-80 xl:w-96 p-3 lg:p-6 border border-gray-200 lg:h-fit max-h-80 lg:max-h-screen">
+        <h2 className="text-lg lg:text-2xl font-bold text-gray-800 mb-3 lg:mb-6 text-center">
+          เลือกบทเรียน
+        </h2>
+
+        <div className="overflow-y-auto max-h-60 lg:max-h-[calc(100vh-200px)] pr-2">
+          {languages.map((language) => (
+            <div key={language.id} className="mb-4">
+              <button
+                onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)}
+                className="w-full flex items-center justify-between p-3 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+              >
+                <span className="font-bold text-gray-800">{language.name}</span>
+                {expandedLanguage === language.id ?
+                  <ChevronDown size={20} /> :
+                  <ChevronRight size={20} />
+                }
+              </button>
+
+              {expandedLanguage === language.id && (
+                <div className="mt-2 space-y-2">
+                  {language.units.map((unit) => (
+                    <div key={unit.id}>
+                      <button
+                        onClick={() => toggleUnit(unit.id)}
+                        className="w-full flex items-center justify-between p-2 ml-4 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+                      >
+                        <span className="font-medium text-gray-700 text-sm">{unit.name}</span>
+                        {expandedUnits[unit.id] ?
+                          <ChevronDown size={16} /> :
+                          <ChevronRight size={16} />
+                        }
+                      </button>
+
+                      {expandedUnits[unit.id] && (
+                        <div className="mt-1 space-y-1">
+                          {unit.levels.map((level) => (
+                            <button
+                              key={level.id}
+                              onClick={() => setCurrentLevelId(level.id)}
+                              disabled={isStarted && !isPaused}
+                              className={`
+                                w-full text-left p-2 ml-8 rounded-md border transition-all duration-200 ease-in-out text-sm
+                                ${currentLevelId === level.id
+                                  ? 'bg-blue-500 text-white border-blue-600 shadow-md'
+                                  : 'bg-white text-gray-600 border-gray-200 hover:bg-blue-50 hover:border-blue-300'
+                                }
+                                ${(isStarted && !isPaused) ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-sm'}
+                              `}
+                            >
+                              {level.name}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <div className="bg-white p-4 lg:p-8 rounded-xl lg:rounded-2xl shadow-2xl flex-1 border border-gray-200 min-h-0">
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 lg:p-6 rounded-lg mb-4 lg:mb-6">
+          <h1 className="text-2xl lg:text-3xl font-extrabold text-center mb-2">
+            React Typing Trainer
+          </h1>
+          <p className="text-center opacity-90 text-sm lg:text-base">
+            {currentLevel?.name || 'กำลังโหลด...'}
+          </p>
+        </div>
+
+        {/* Stats Display with Icons */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
+          <div className="bg-blue-50 p-3 lg:p-4 rounded-lg shadow-md text-center border border-blue-200">
+            <Clock className="mx-auto mb-2 text-blue-600" size={20} />
+            <p className="text-xl lg:text-2xl font-bold text-blue-800">{formatTime(timer)}</p>
+            <p className="text-xs lg:text-sm font-medium text-blue-700">เวลา</p>
+          </div>
+          <div className="bg-green-50 p-3 lg:p-4 rounded-lg shadow-md text-center border border-green-200">
+            <Target className="mx-auto mb-2 text-green-600" size={20} />
+            <p className="text-xl lg:text-2xl font-bold text-green-800">{wpm}</p>
+            <p className="text-xs lg:text-sm font-medium text-green-700">WPM</p>
+          </div>
+          <div className="bg-purple-50 p-3 lg:p-4 rounded-lg shadow-md text-center border border-purple-200">
+            <Award className="mx-auto mb-2 text-purple-600" size={20} />
+            <p className="text-xl lg:text-2xl font-bold text-purple-800">{accuracy}%</p>
+            <p className="text-xs lg:text-sm font-medium text-purple-700">ความแม่นยำ</p>
+          </div>
+          <div className="bg-red-50 p-3 lg:p-4 rounded-lg shadow-md text-center border border-red-200">
+            <p className="text-xl lg:text-2xl font-bold text-red-800">{totalErrors}</p>
+            <p className="text-xs lg:text-sm font-medium text-red-700">ข้อผิดพลาด</p>
+          </div>
+        </div>
+
+        {/* Progress Bar */}
+        <div className="mb-4 lg:mb-6">
+          <div className="flex justify-between text-sm text-gray-600 mb-2">
+            <span>ความคืบหน้า</span>
+            <span>{completedChars} / {totalChars} ตัวอักษร</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-3">
+            <div
+              className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300"
+              style={{ width: `${Math.min(progress, 100)}%` }}
+            ></div>
+          </div>
         </div>
 
         {/* Typing Area */}
-        <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 mb-6 min-h-[100px] flex items-center justify-center text-xl leading-relaxed text-center font-mono relative overflow-hidden whitespace-pre-wrap">
+        <div className="bg-blue-50 p-3 lg:p-6 rounded-lg border border-blue-200 mb-4 lg:mb-6 min-h-[80px] lg:min-h-[100px] flex items-center justify-center text-base lg:text-xl leading-relaxed text-center font-mono relative overflow-hidden whitespace-pre-wrap">
           {renderTextToType()}
         </div>
 
         {/* Input Text Area */}
         <textarea
           ref={inputRef}
-          className="w-full p-4 border-2 border-blue-300 rounded-xl focus:outline-none focus:ring-4 focus:ring-blue-200 text-lg font-mono resize-none transition duration-200 ease-in-out min-h-[100px]"
-          placeholder={isFinished ? 'กด "เริ่มใหม่" เพื่อเล่นอีกครั้ง' : 'เริ่มพิมพ์ที่นี่...'}
+          className="w-full p-3 lg:p-4 border-2 border-blue-300 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200 text-base lg:text-lg font-mono resize-none transition duration-200 ease-in-out min-h-[80px] lg:min-h-[100px]"
+          placeholder={isFinished ? 'กด "เริ่มใหม่" เพื่อเล่นอีกครั้ง' : isPaused ? 'กด "ดำเนินต่อ" เพื่อเล่นต่อ' : 'เริ่มพิมพ์ที่นี่...'}
           value={typedText}
           onChange={handleInputChange}
-          disabled={isFinished}
+          disabled={isFinished || isPaused}
           autoFocus
         />
 
+        {/* Game Controls */}
+        <div className="mt-4 lg:mt-6 text-center flex gap-2 justify-center">
+          <button
+            onClick={handleStartPause}
+            disabled={isFinished}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 text-sm lg:text-base"
+          >
+            {!isStarted ? (
+              <>
+                <Play size={16} />
+                เริ่ม
+              </>
+            ) : isPaused ? (
+              <>
+                <Play size={16} />
+                ดำเนินต่อ
+              </>
+            ) : (
+              <>
+                <Pause size={16} />
+                หยุด
+              </>
+            )}
+          </button>
+
+          <button
+            onClick={handleResetGame}
+            className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-300 text-sm lg:text-base"
+          >
+            <RotateCcw size={16} />
+            เริ่มใหม่
+          </button>
+        </div>
+
         {/* Finger Guidance */}
-        {nextChar && !isFinished && (
-          <div className="mt-8 p-4 bg-green-50 rounded-xl border border-green-200 text-center">
-            <p className="text-lg font-semibold text-green-800">
-              ตัวอักษรถัดไป: <span className="text-3xl font-bold text-green-900">{nextChar === ' ' ? '[Space]' : nextChar}</span>
+        {nextChar && !isFinished && !isPaused && (
+          <div className="mt-4 lg:mt-6 p-3 lg:p-4 bg-green-50 rounded-lg border border-green-200 text-center">
+            <p className="text-base lg:text-lg font-semibold text-green-800">
+              ตัวอักษรถัดไป: <span className="text-2xl lg:text-3xl font-bold text-green-900">{nextChar === ' ' ? '[Space]' : nextChar}</span>
             </p>
             {activeFinger && (
-              <p className="text-md text-green-700 mt-2">
+              <p className="text-sm lg:text-md text-green-700 mt-2">
                 ใช้นิ้ว: <span className="font-bold">{fingerNamesDisplay[activeFinger]}</span>
               </p>
             )}
@@ -554,43 +879,41 @@ const App: React.FC = () => {
         )}
 
         {/* Virtual Keyboard */}
-        <div className="mt-8 p-6 bg-gray-100 rounded-xl shadow-inner border border-gray-200 overflow-x-auto">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">คีย์บอร์ด</h2>
-          {/* Manual language toggle is removed in favor of automatic detection */}
+        <div className="mt-4 lg:mt-6 p-3 lg:p-6 bg-gray-100 rounded-lg shadow-inner border border-gray-200 overflow-x-auto">
+          <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-2 lg:mb-4 text-center">คีย์บอร์ด</h2>
           <div className="flex flex-col items-center justify-center">
             {keyboardRows.map((row, rowIndex) => (
-              <div key={rowIndex} className="flex my-1">
+              <div key={rowIndex} className="flex my-0.5 lg:my-1">
                 {row.map((keyLabel) => {
                   const isHighlighted = highlightedKeys.includes(keyLabel) || (highlightedKeys.includes('Shift') && (keyLabel === 'Shift' || keyLabel === 'ShiftRight'));
                   const isCapsActive = keyLabel === 'CapsLock' && isCapsLockActive;
 
                   const displayChar = keyLabel.length > 1 ? keyLabel :
-                    (isShiftActive ?
+                    (isShiftActive || isCapsLockActive ?
                       keyDisplays[keyboardLanguage].shifted[keyLabel as keyof typeof keyDisplays.en.shifted]
                       : keyDisplays[keyboardLanguage].unshifted[keyLabel as keyof typeof keyDisplays.en.unshifted]
                     ) || keyLabel;
-
-                  // Handle CapsLock display for English letters
-                  const finalDisplay = (isCapsLockActive && !isShiftActive && displayChar.match(/[a-z]/i)) ?
-                    displayChar.toUpperCase() : displayChar;
 
                   return (
                     <div
                       key={keyLabel}
                       className={`
-                            relative flex items-center justify-center
-                            m-0.5 rounded-md text-sm font-semibold transition-all duration-100 ease-in-out
-                            border-b-4
-                            ${isHighlighted ? 'bg-blue-400 text-white border-blue-600 -translate-y-1 shadow-lg' : isCapsActive ? 'bg-blue-300 text-white border-blue-500' : 'bg-gray-200 text-gray-800 border-gray-400 shadow-sm'}
-                            ${keyLabel === 'Backspace' ? 'w-24' : ''}
-                            ${keyLabel === 'Tab' ? 'w-16' : ''}
-                            ${keyLabel === 'Enter' ? 'w-24' : ''}
-                            ${keyLabel === 'CapsLock' ? 'w-20' : ''}
-                            ${keyLabel === 'Shift' || keyLabel === 'ShiftRight' ? 'flex-grow' : ''}
-                            ${keyLabel === 'Space' ? 'w-64' : 'w-12 h-12'}
-                            `}
+                        relative flex items-center justify-center
+                        m-0.5 rounded-md text-xs lg:text-sm font-semibold transition-all duration-100 ease-in-out
+                        border-b-4
+                        ${isHighlighted ? 'bg-blue-400 text-white border-blue-600 -translate-y-1 shadow-lg' : isCapsActive ? 'bg-blue-300 text-white border-blue-500' : 'bg-gray-200 text-gray-800 border-gray-400 shadow-sm'}
+                        ${keyLabel === 'Backspace' ? 'w-16 lg:w-24' : ''}
+                        ${keyLabel === 'Tab' ? 'w-12 lg:w-20' : ''}
+                        ${keyLabel === '\\' ? 'w-12 lg:w-18' : ''}
+                        ${keyLabel === 'CapsLock' ? 'w-16 lg:w-26' : ''}
+                        ${keyLabel === 'Enter' ? 'w-16 lg:w-26' : ''}
+                        ${keyLabel === 'Shift' || keyLabel === 'ShiftRight' ? 'w-20 lg:w-32' : ''}
+                        ${keyLabel === 'Control' || keyLabel === 'ControlRight' ? 'w-20 lg:w-30' : ''}
+                        ${keyLabel === 'Alt' || keyLabel === 'AltGr' ? 'w-16 lg:w-18' : ''}
+                        ${keyLabel === 'Space' ? 'w-56 lg:w-96' : 'w-8 h-8 lg:w-12 lg:h-12'}
+                      `}
                     >
-                      {finalDisplay}
+                      {displayChar}
                     </div>
                   );
                 })}
@@ -599,81 +922,66 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Stats Display */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-6">
-          <div className="bg-purple-100 p-4 rounded-xl shadow-md text-center border border-purple-200">
-            <p className="text-sm font-medium text-purple-700">เวลา (วินาที)</p>
-            <p className="text-3xl font-bold text-purple-800">{timer}</p>
-          </div>
-          <div className="bg-green-100 p-4 rounded-xl shadow-md text-center border border-green-200">
-            <p className="text-sm font-medium text-green-700">ข้อผิดพลาด</p>
-            <p className="text-3xl font-bold text-green-800">{totalErrors}</p>
-          </div>
-          <div className="bg-yellow-100 p-4 rounded-xl shadow-md text-center border border-yellow-200">
-            <p className="text-sm font-medium text-yellow-700">WPM</p>
-            <p className="text-3xl font-bold text-yellow-800">{wpm}</p>
-          </div>
-          <div className="bg-red-100 p-4 rounded-xl shadow-md text-center border border-red-200">
-            <p className="text-sm font-medium text-red-700">ความแม่นยำ (%)</p>
-            <p className="text-3xl font-bold text-red-800">{accuracy}</p>
-          </div>
-        </div>
-
-        {/* Game Controls */}
-        <div className="mt-8 text-center">
-          <button
-            onClick={() => {
-              const selectedLevel = levels.find(l => l.id === currentLevelId);
-              if (selectedLevel) {
-                setFullTextContent(selectedLevel.text); // This will trigger the useEffect to reset the game
-              }
-            }}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-xl shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300"
-          >
-            {isFinished || !isStarted ? 'เริ่มใหม่' : 'รีเซ็ต'}
-          </button>
-        </div>
-
         {/* Result & Grade Display */}
         {isFinished && (
-          <div className="mt-8 bg-indigo-50 p-6 rounded-xl shadow-inner border border-indigo-200 text-center">
-            <h2 className="text-2xl font-bold text-indigo-800 mb-3">ผลลัพธ์ของคุณ:</h2>
-            <p className="text-xl font-semibold text-indigo-700">
-              เกรด: <span className="text-indigo-900 font-bold text-2xl">{getGrade()}</span>
+          <div className="mt-4 lg:mt-6 bg-green-50 border border-green-200 p-4 lg:p-6 rounded-lg">
+            <h3 className="text-xl font-bold text-green-800 mb-4 text-center">
+              🎉 ยินดีด้วย! คุณพิมพ์เสร็จแล้ว
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
+              <div>
+                <div className="text-2xl font-bold text-green-600">{formatTime(timer)}</div>
+                <div className="text-sm text-gray-600">เวลาทั้งหมด</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{wpm}</div>
+                <div className="text-sm text-gray-600">คำต่อนาที</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{accuracy}%</div>
+                <div className="text-sm text-gray-600">ความถูกต้อง</div>
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-green-600">{totalErrors}</div>
+                <div className="text-sm text-gray-600">ข้อผิดพลาด</div>
+              </div>
+            </div>
+            <p className="text-lg font-semibold text-green-700 text-center">
+              เกรด: <span className="text-green-900 font-bold text-xl">{getGrade()}</span>
             </p>
           </div>
         )}
 
         {/* Scoring Criteria Display for Current Level */}
-        <div className="mt-8 bg-gray-50 p-6 rounded-xl border border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4 text-center">
-            เกณฑ์การให้คะแนนสำหรับด่าน "{currentLevelId && levels.find(l => l.id === currentLevelId)?.name || 'กำลังโหลด...'}":
+        <div className="mt-4 lg:mt-6 bg-gray-50 p-4 lg:p-6 rounded-lg border border-gray-200">
+          <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-3 lg:mb-4 text-center">
+            เกณฑ์การให้คะแนนสำหรับ "{currentLevel?.name || 'กำลังโหลด...'}":
           </h2>
           {scoringCriteria[currentLevelId] ? (
             <div className="overflow-x-auto">
               <table className="min-w-full bg-white rounded-lg shadow-sm">
                 <thead>
-                  <tr className="bg-gray-200 text-gray-700 uppercase text-sm leading-normal">
-                    <th className="py-3 px-6 text-left rounded-tl-lg">เกรด</th>
-                    <th className="py-3 px-6 text-left">WPM ขั้นต่ำ</th>
-                    <th className="py-3 px-6 text-left">ความแม่นยำขั้นต่ำ (%)</th>
-                    <th className="py-3 px-6 text-left rounded-tr-lg">ข้อผิดพลาดสูงสุด</th>
+                  <tr className="bg-gray-200 text-gray-700 uppercase text-xs lg:text-sm leading-normal">
+                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tl-lg">เกรด</th>
+                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">WPM ขั้นต่ำ</th>
+                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">ความแม่นยำขั้นต่ำ (%)</th>
+                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tr-lg">ข้อผิดพลาดสูงสุด</th>
                   </tr>
                 </thead>
-                <tbody className="text-gray-600 text-sm font-light">
+                <tbody className="text-gray-600 text-xs lg:text-sm font-light">
                   {scoringCriteria[currentLevelId].map((criteria, index) => (
                     <tr key={index} className="border-b border-gray-200 hover:bg-gray-100">
-                      <td className="py-3 px-6 text-left whitespace-nowrap font-medium">{criteria.grade}</td>
-                      <td className="py-3 px-6 text-left">{criteria.minWPM}</td>
-                      <td className="py-3 px-6 text-left">{criteria.minAccuracy}</td>
-                      <td className="py-3 px-6 text-left">{criteria.maxErrors}</td>
+                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left whitespace-nowrap font-medium">{criteria.grade}</td>
+                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{criteria.minWPM}</td>
+                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{criteria.minAccuracy}</td>
+                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{criteria.maxErrors}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           ) : (
-            <p className="text-center text-gray-600">ไม่มีเกณฑ์การให้คะแนนสำหรับด่านนี้</p>
+            <p className="text-center text-gray-600 text-sm lg:text-base">ไม่มีเกณฑ์การให้คะแนนสำหรับด่านนี้</p>
           )}
         </div>
       </div>
