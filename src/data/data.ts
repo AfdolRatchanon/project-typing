@@ -1,4 +1,4 @@
-import type { Language, LevelScoring } from '../types' // Import the interfaces
+import type { Language, LevelScoring } from '../types/types' // Import the interfaces
 
 // --- Data for Languages, Units, Sessions and Scoring Criteria ---
 export const languages: Language[] = [
@@ -16,7 +16,7 @@ export const languages: Language[] = [
                         levels: [
                             {
                                 id: 'thai-practice-1-1-1',
-                                name: 'ครั้งที่ 1',
+                                name: 'ครั้งที่ 1 ดดด',
                                 text: 'ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด',
                             },
                             {

@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert } from 'lucide-react';
 import './App.css'
 
-// import type { Language, Unit, Session, Level, ScoringCriteria, LevelScoring } from './types'
-import { languages, scoringCriteria } from './data'
+// import type { Language, Unit, Session, Level, ScoringCriteria, LevelScoring } from './types/types'
+import { languages, scoringCriteria } from './data/data'
 
 
 // Define types for better type safety and code readability
@@ -604,102 +604,200 @@ const App: React.FC = () => {
   const totalCharsActual = fullTextContent.length;
   const progress = totalCharsActual > 0 ? (totalProgress / totalCharsActual) * 100 : 0;
 
+  useEffect(() => {
+    // Find current level and auto-expand menu to show it
+    for (const language of languages) {
+      for (const unit of language.units) {
+        for (const session of unit.sessions) {
+          const foundLevel = session.levels.find(level => level.id === currentLevelId);
+          if (foundLevel) {
+            setExpandedLanguage(language.id);
+            setExpandedUnits(prev => ({ ...prev, [unit.id]: true }));
+            setExpandedSessions(prev => ({ ...prev, [session.id]: true }));
+            return;
+          }
+        }
+      }
+    }
+  }, [currentLevelId, languages]);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex flex-col lg:flex-row p-2 sm:p-4 font-inter gap-3 lg:gap-6">
+    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex flex-col xl:flex-row p-2 sm:p-4 font-inter gap-3 lg:gap-6">
       {/* Aside Menu for Level Selection */}
-      <aside className="bg-white rounded-xl lg:rounded-2xl shadow-2xl w-full lg:w-80 xl:w-96 p-3 lg:p-6 border border-gray-200 lg:h-fit max-h-80 lg:max-h-screen">
-        <h2 className="text-lg lg:text-2xl font-bold text-gray-800 mb-3 lg:mb-6 text-center">
-          เลือกบทเรียน
-        </h2>
+      <aside className="bg-white rounded-xl lg:rounded-2xl shadow-2xl w-full xl:w-80 2xl:w-96 border border-gray-200 h-150 sm:h-200 lg:h-500 lg:max-h-[90vh] flex flex-col">
+        {/* Header with gradient */}
+        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 sm:p-4 lg:p-5 rounded-t-xl lg:rounded-t-2xl shadow-lg">
+          <h2 className="text-base sm:text-lg lg:text-xl font-bold text-center flex items-center justify-center gap-2">
+            <Target size={16} className="sm:w-5 sm:h-5" />
+            เลือกบทเรียน
+          </h2>
+        </div>
 
-        <div className="overflow-y-auto max-h-60 lg:max-h-[calc(100vh-200px)] pr-2">
-          {languages.map((language) => (
-            <div key={language.id} className="mb-4">
-              <button
-                onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)}
-                className="w-full flex items-center justify-between p-3 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                <span className="font-bold text-gray-800">{language.name}</span>
-                {expandedLanguage === language.id ?
-                  <ChevronDown size={20} /> :
-                  <ChevronRight size={20} />
-                }
-              </button>
+        {/* Menu Content with improved scrolling - responsive */}
+        <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
+          <div className="space-y-2 sm:space-y-3">
+            {languages.map((language, _langIndex) => { // Fixed: added underscore
+              // Check if current level is in this language
+              const isLanguageActive = language.units.some(unit =>
+                unit.sessions.some(session =>
+                  session.levels.some(level => level.id === currentLevelId)
+                )
+              );
 
-              {expandedLanguage === language.id && (
-                <div className="mt-1 space-y-1">
-                  {language.units.map((unit) => (
-                    <div key={unit.id}>
-                      <button
-                        onClick={() => toggleUnit(unit.id)}
-                        className="w-full flex items-center justify-between p-2 ml-6 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
-                      >
-                        <span className="font-medium text-gray-600 text-sm">{unit.name}</span>
-                        {expandedUnits[unit.id] ?
-                          <ChevronDown size={16} /> :
-                          <ChevronRight size={16} />
-                        }
-                      </button>
+              return (
+                <div key={language.id} className="border border-gray-200 rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+                  <button
+                    onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)}
+                    className={`w-full flex items-center justify-between p-2.5 sm:p-3 lg:p-4 transition-all duration-300 ${isLanguageActive
+                      ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500'
+                      : 'bg-gray-50 hover:bg-gray-100'
+                      }`}
+                  >
+                    <span className={`font-bold text-sm sm:text-base ${isLanguageActive ? 'text-blue-700' : 'text-gray-800'}`}>
+                      {language.name}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isLanguageActive && <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>}
+                      {expandedLanguage === language.id ?
+                        <ChevronDown size={16} className={`sm:w-5 sm:h-5 transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'}`} /> :
+                        <ChevronRight size={16} className={`sm:w-5 sm:h-5 transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'}`} />
+                      }
+                    </div>
+                  </button>
 
-                      {expandedUnits[unit.id] && (
-                        <div className="mt-1 space-y-1">
-                          {unit.sessions.map((session) => (
-                            <div key={session.id}>
+                  {expandedLanguage === language.id && (
+                    <div className="bg-white border-t border-gray-100">
+                      <div className="space-y-1.5 sm:space-y-2 p-1.5 sm:p-2">
+                        {language.units.map((unit, _unitIndex) => { // Fixed: added underscore
+                          // Check if current level is in this unit
+                          const isUnitActive = unit.sessions.some(session =>
+                            session.levels.some(level => level.id === currentLevelId)
+                          );
+
+                          return (
+                            <div key={unit.id} className="border border-gray-150 rounded-md sm:rounded-lg overflow-hidden shadow-sm">
                               <button
-                                onClick={() => toggleSession(session.id)}
-                                className="w-full flex items-center justify-between p-2 ml-10 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors"
+                                onClick={() => toggleUnit(unit.id)}
+                                className={`w-full flex items-center justify-between p-2 sm:p-2.5 lg:p-3 transition-all duration-300 ${isUnitActive
+                                  ? 'bg-gradient-to-r from-blue-25 to-blue-50 border-l-3 border-l-blue-400'
+                                  : 'bg-gray-25 hover:bg-gray-50'
+                                  }`}
                               >
-                                <span className="font-medium text-gray-600 text-xs">{session.name}</span>
-                                {expandedSessions[session.id] ?
-                                  <ChevronDown size={14} /> :
-                                  <ChevronRight size={14} />
-                                }
+                                <span className={`font-semibold text-xs sm:text-sm ${isUnitActive ? 'text-blue-700' : 'text-gray-700'
+                                  }`}>
+                                  {unit.name}
+                                </span>
+                                <div className="flex items-center gap-1.5 sm:gap-2">
+                                  {isUnitActive && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-pulse"></div>}
+                                  {expandedUnits[unit.id] ?
+                                    <ChevronDown size={14} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'}`} /> :
+                                    <ChevronRight size={14} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'}`} />
+                                  }
+                                </div>
                               </button>
 
-                              {expandedSessions[session.id] && (
-                                <div className="mt-1 space-y-1">
-                                  {session.levels.map((level) => (
-                                    <button
-                                      key={level.id}
-                                      onClick={() => setCurrentLevelId(level.id)}
-                                      disabled={isStarted && !isPaused}
-                                      className={`
-                              w-full text-left p-2 ml-14 rounded-md border transition-all duration-200 ease-in-out text-xs
-                              ${currentLevelId === level.id
-                                          ? 'bg-blue-500 text-white border-blue-600 shadow-md'
-                                          : 'bg-white text-gray-600 border-gray-200 hover:bg-blue-50 hover:border-blue-300'
-                                        }
-                              ${(isStarted && !isPaused) ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-sm'}
-                            `}
-                                    >
-                                      {level.name}
-                                    </button>
-                                  ))}
+                              {expandedUnits[unit.id] && (
+                                <div className="bg-white border-t border-gray-100">
+                                  <div className="space-y-1 sm:space-y-1.5 p-1.5 sm:p-2">
+                                    {unit.sessions.map((session, _sessionIndex) => { // Fixed: added underscore
+                                      // Check if current level is in this session
+                                      const isSessionActive = session.levels.some(level => level.id === currentLevelId);
+
+                                      return (
+                                        <div key={session.id} className="border border-gray-100 rounded-sm sm:rounded-md overflow-hidden">
+                                          <button
+                                            onClick={() => toggleSession(session.id)}
+                                            className={`w-full flex items-center justify-between p-2 sm:p-2.5 transition-all duration-300 ${isSessionActive
+                                              ? 'bg-gradient-to-r from-blue-25 to-indigo-25 border-l-2 border-l-blue-300'
+                                              : 'bg-gray-25 hover:bg-gray-50'
+                                              }`}
+                                          >
+                                            <span className={`font-medium text-xs ${isSessionActive ? 'text-blue-600' : 'text-gray-600'
+                                              }`}>
+                                              {session.name}
+                                            </span>
+                                            <div className="flex items-center gap-1 sm:gap-1.5">
+                                              {isSessionActive && <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-blue-300 rounded-full animate-pulse"></div>}
+                                              {expandedSessions[session.id] ?
+                                                <ChevronDown size={12} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'}`} /> :
+                                                <ChevronRight size={12} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'}`} />
+                                              }
+                                            </div>
+                                          </button>
+
+                                          {expandedSessions[session.id] && (
+                                            <div className="bg-white border-t border-gray-50 p-1.5 sm:p-2">
+                                              <div className="space-y-1 sm:space-y-1.5">
+                                                {session.levels.map((level, _levelIndex) => ( // Fixed: added underscore
+                                                  <button
+                                                    key={level.id}
+                                                    onClick={() => setCurrentLevelId(level.id)}
+                                                    disabled={isStarted && !isPaused}
+                                                    className={`
+                                                      w-full text-left p-2 sm:p-2.5 lg:p-3 rounded-md sm:rounded-lg border transition-all duration-300 ease-in-out text-xs font-medium
+                                                      ${currentLevelId === level.id
+                                                        ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-[1.02] ring-2 ring-blue-200 ring-opacity-50'
+                                                        : 'bg-white text-gray-600 border-gray-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md hover:transform hover:scale-[1.01]'
+                                                      }
+                                                      ${(isStarted && !isPaused) ? 'opacity-50 cursor-not-allowed' : ''}
+                                                    `}
+                                                  >
+                                                    <div className="flex items-center justify-between">
+                                                      <span className="leading-relaxed">{level.name}</span>
+                                                      {currentLevelId === level.id && (
+                                                        <div className="flex items-center gap-1">
+                                                          <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full animate-pulse"></div>
+                                                          <span className="text-xs opacity-90 hidden sm:inline">กำลังเรียน</span>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  </button>
+                                                ))}
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
                               )}
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          );
+                        })}
+                      </div>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Footer with current selection info - responsive */}
+        <div className="border-t border-gray-200 p-2 sm:p-3 lg:p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-b-xl lg:rounded-b-2xl">
+          <div className="text-xs text-gray-600 text-center">
+            <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
+              <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse"></div>
+              <span className="font-semibold text-gray-700 text-xs sm:text-sm">กำลังเรียน:</span>
             </div>
-          ))}
+            <div className="font-bold text-blue-700 truncate px-2 py-1 bg-white rounded-md shadow-sm border text-xs sm:text-sm">
+              {currentLevel?.name || 'กำลังโหลด...'}
+            </div>
+          </div>
         </div>
       </aside>
 
       {/* Main Content */}
       <div className="bg-white p-4 lg:p-8 rounded-xl lg:rounded-2xl shadow-2xl flex-1 border border-gray-200 min-h-0">
-        <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 lg:p-6 rounded-lg mb-4 lg:mb-6">
+        {/* <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-4 lg:p-6 rounded-lg mb-4 lg:mb-6">
           <h1 className="text-2xl lg:text-3xl font-extrabold text-center mb-2">
             React Typing Trainer
           </h1>
           <p className="text-center opacity-90 text-sm lg:text-base">
-            {currentLevel?.name || 'กำลังโหลด...'}
+            {currentLevel?.id || 'กำลังโหลด...'}
           </p>
-        </div>
+        </div> */}
 
         {/* Stats Display with Icons */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
@@ -798,7 +896,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Virtual Keyboard และ Finger Guidance */}
-        <div className="flex flex-col lg:flex-row gap-3 lg:gap-4">
+        <div className="flex flex-col-reverse lg:flex-row gap-3 lg:gap-4">
           {/* Virtual Keyboard */}
           <div className="flex-1 p-3 lg:p-4 bg-gray-100 rounded-lg shadow-inner border border-gray-200 overflow-x-auto">
             <h2 className="text-base lg:text-lg font-bold text-gray-800 mb-2 lg:mb-3 text-center">คีย์บอร์ด</h2>
@@ -822,16 +920,16 @@ const App: React.FC = () => {
                           relative flex items-center justify-center
                           m-0.5 rounded-md text-xs lg:text-sm font-semibold transition-all duration-100 ease-in-out
                           border-b-4
-                          ${isHighlighted ? 'bg-blue-400 text-white border-blue-600 -translate-y-1 shadow-lg' : isCapsActive ? 'bg-blue-300 text-white border-blue-500' : 'bg-gray-200 text-gray-800 border-gray-400 shadow-sm'}
-                          ${keyLabel === 'Backspace' ? 'w-16 lg:w-24' : ''}
-                          ${keyLabel === 'Tab' ? 'w-12 lg:w-20' : ''}
-                          ${keyLabel === '\\' ? 'w-12 lg:w-18' : ''}
-                          ${keyLabel === 'CapsLock' ? 'w-16 lg:w-26' : ''}
-                          ${keyLabel === 'Enter' ? 'w-16 lg:w-26' : ''}
-                          ${keyLabel === 'Shift' || keyLabel === 'ShiftRight' ? 'w-20 lg:w-32' : ''}
-                          ${keyLabel === 'Control' || keyLabel === 'ControlRight' ? 'w-20 lg:w-30' : ''}
-                          ${keyLabel === 'Alt' || keyLabel === 'AltGr' ? 'w-16 lg:w-18' : ''}
-                          ${keyLabel === 'Space' ? 'w-56 lg:w-96' : 'w-8 h-8 lg:w-12 lg:h-12'}
+                          ${isHighlighted ? 'bg-blue-400 text-white border-blue-600 -translate-y-1 shadow-xl' : isCapsActive ? 'bg-blue-300 text-white border-blue-500' : 'bg-gray-200 text-gray-800 border-gray-400 shadow-sm'}
+                          ${keyLabel === 'Backspace' ? 'w-16 xl:w-24' : ''}
+                          ${keyLabel === 'Tab' ? 'w-12 xl:w-20' : ''}
+                          ${keyLabel === '\\' ? 'w-12 xl:w-18' : ''}
+                          ${keyLabel === 'CapsLock' ? 'w-16 xl:w-26' : ''}
+                          ${keyLabel === 'Enter' ? 'w-16 xl:w-26' : ''}
+                          ${keyLabel === 'Shift' || keyLabel === 'ShiftRight' ? 'w-20 xl:w-32' : ''}
+                          ${keyLabel === 'Control' || keyLabel === 'ControlRight' ? 'w-20 xl:w-30' : ''}
+                          ${keyLabel === 'Alt' || keyLabel === 'AltGr' ? 'w-16 xl:w-18' : ''}
+                          ${keyLabel === 'Space' ? 'w-56 xl:w-96' : 'w-8 h-8 xl:w-12 xl:h-12'}
                         `}
                       >
                         {displayChar}
