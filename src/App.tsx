@@ -82,34 +82,6 @@ const keyToFingerMap: { [key: string]: string } = {
   'AltGr': 'rightThumb',
 };
 
-// ตัวอักษรที่อยู่ด้านบน (วรรณยุกต์)
-const topMarks = ['่', '้', '๊', '๋'];
-
-// ตัวอักษรที่อยู่ด้านล่าง (สระ)
-const bottomMarks = ['ิ', 'ี', 'ึ', 'ื', 'ำ'];
-
-// ฟังก์ชันตรวจหาว่าข้อความมีการซ้อนทับของตัวอักษรไทยหรือไม่
-const hasThaiStackedChars = (text: string): boolean => {
-  for (let i = 0; i < text.length - 1; i++) {
-    const currentChar = text[i];
-    const nextChar = text[i + 1];
-
-    // ตรวจหาการซ้อนทับ: สระด้านล่าง + วรรณยุกต์ด้านบน
-    if (bottomMarks.includes(currentChar) && topMarks.includes(nextChar)) {
-      return true;
-    }
-
-    // ตรวจหาการซ้อนทับ: พยัญชนะ + สระด้านล่าง + วรรณยุกต์ด้านบน
-    if (i < text.length - 2) {
-      const thirdChar = text[i + 2];
-      if (bottomMarks.includes(nextChar) && topMarks.includes(thirdChar)) {
-        return true;
-      }
-    }
-  }
-  return false;
-};
-
 // Function to determine which Shift key to use based on key position
 // Function to determine which Shift key to use based on key position
 const getRecommendedShiftKey = (baseKey: string): 'Shift' | 'ShiftRight' => {
