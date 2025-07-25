@@ -24,6 +24,11 @@ export interface Language {
     units: Unit[];
 }
 
+export interface TimerConfig {
+    duration: number; // milliseconds, Infinity สำหรับไม่จำกัดเวลา
+    label: string;
+}
+
 export interface ScoringCriteria {
     minWPM: number;
     minAccuracy: number;

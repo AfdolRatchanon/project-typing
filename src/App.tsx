@@ -538,7 +538,7 @@ const App: React.FC = () => {
     // วรรณยุกต์ไทย
     const toneMarks = ['่', '้', '๊', '๋'];
     // สระที่อยู่ด้านบน
-    const topVowels = ['ิ', 'ี', 'ึ', 'ื', '์'];
+    const topVowels = ['ิ', 'ี', 'ึ', 'ื', '์', 'ั'];
     // สระอำ
     const saraAm = 'ำ';
 
