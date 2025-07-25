@@ -17,7 +17,7 @@ export const languages: Language[] = [
                             {
                                 id: 'thai-practice-1-1-1',
                                 name: 'ครั้งที่ 1 ดดด',
-                                text: 'ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด',
+                                text: 'น้ำ ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด ดดด',
                             },
                             {
                                 id: 'thai-practice-1-1-2',
@@ -670,7 +670,7 @@ export const languages: Language[] = [
                             {
                                 id: 'thai-practice-5-4-5',
                                 name: 'ครั้งที่ 5 ผมฝากไก่สาวดาวมา',
-                                text: 'ผมฝากไก่สาวดาวมา ไก่สี่ดาวไม่มี ยามย้ายมานอนที่นี่ ผมไม่มี ๆ',
+                                text: 'ผมฝากไก่สามดาวมา ไก่สี่ดาวไม่มี ยามย้ายมานอนที่นี่ ผมไม่มี ๆ',
                             },
                         ]
                     },
@@ -716,7 +716,7 @@ export const languages: Language[] = [
                             {
                                 id: 'english-basic-2-1',
                                 name: 'Level 1: Left Side',
-                                text: 'q w e r t',
+                                text: 'Q W E R T',
                             },
                             {
                                 id: 'english-basic-2-2',

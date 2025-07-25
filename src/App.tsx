@@ -82,6 +82,34 @@ const keyToFingerMap: { [key: string]: string } = {
   'AltGr': 'rightThumb',
 };
 
+// ตัวอักษรที่อยู่ด้านบน (วรรณยุกต์)
+const topMarks = ['่', '้', '๊', '๋'];
+
+// ตัวอักษรที่อยู่ด้านล่าง (สระ)
+const bottomMarks = ['ิ', 'ี', 'ึ', 'ื', 'ำ'];
+
+// ฟังก์ชันตรวจหาว่าข้อความมีการซ้อนทับของตัวอักษรไทยหรือไม่
+const hasThaiStackedChars = (text: string): boolean => {
+  for (let i = 0; i < text.length - 1; i++) {
+    const currentChar = text[i];
+    const nextChar = text[i + 1];
+
+    // ตรวจหาการซ้อนทับ: สระด้านล่าง + วรรณยุกต์ด้านบน
+    if (bottomMarks.includes(currentChar) && topMarks.includes(nextChar)) {
+      return true;
+    }
+
+    // ตรวจหาการซ้อนทับ: พยัญชนะ + สระด้านล่าง + วรรณยุกต์ด้านบน
+    if (i < text.length - 2) {
+      const thirdChar = text[i + 2];
+      if (bottomMarks.includes(nextChar) && topMarks.includes(thirdChar)) {
+        return true;
+      }
+    }
+  }
+  return false;
+};
+
 // Function to determine which Shift key to use based on key position
 // Function to determine which Shift key to use based on key position
 const getRecommendedShiftKey = (baseKey: string): 'Shift' | 'ShiftRight' => {
@@ -529,17 +557,58 @@ const App: React.FC = () => {
     return 'ต้องฝึกเพิ่ม';
   }, [currentLevelId, wpm, accuracy, totalErrors, isFinished]);
 
+  // แทนที่ฟังก์ชัน renderTextToType เดิมด้วยโค้ดนี้:
+
   const renderTextToType = () => {
     const isLastSegment = currentSegmentIndex === segments.length - 1;
     const isTypingComplete = typedText.length === textToType.length;
+
+    // วรรณยุกต์ไทย
+    const toneMarks = ['่', '้', '๊', '๋'];
+    // สระที่อยู่ด้านบน
+    const topVowels = ['ิ', 'ี', 'ึ', 'ื', '์'];
+    // สระอำ
+    const saraAm = 'ำ';
 
     const textElements = textToType.split('').map((char, index) => {
       let colorClass = 'text-gray-700';
       if (index < typedText.length) {
         colorClass = typedText[index] === char ? 'text-green-600' : 'text-red-600 line-through';
       }
+
+      // ตรวจสอบว่าเป็นวรรณยุกต์หรือไม่
+      const isToneMark = toneMarks.includes(char);
+
+      // ตรวจสอบว่ามีสระด้านบนก่อนหน้าหรือไม่ (ในตำแหน่งก่อนหน้า 1-2 ตัว)
+      let hasTopVowelBefore = false;
+
+      // ตรวจสอบว่ามีสระอำหลังวรรณยุกต์หรือไม่ (กรณี น + ้ + ำ)
+      let hasSaraAmAfter = false;
+
+      if (isToneMark && index > 0) {
+        // ตรวจสอบตัวอักษรก่อนหน้า 1 ตัว
+        if (topVowels.includes(textToType[index - 1])) {
+          hasTopVowelBefore = true;
+        }
+        // ตรวจสอบตัวอักษรก่อนหน้า 2 ตัว (กรณีมีพยัญชนะคั่น)
+        else if (index > 1 && topVowels.includes(textToType[index - 2])) {
+          hasTopVowelBefore = true;
+        }
+
+        // ตรวจสอบว่ามีสระอำหลังวรรณยุกต์หรือไม่
+        if (index < textToType.length - 1 && textToType[index + 1] === saraAm) {
+          hasSaraAmAfter = true;
+        }
+      }
+
+      // ถ้าเป็นวรรณยุกต์และมีสระอำตามหลัง ให้เลื่อนขึ้นเหมือนมีสระด้านบน
+      const shouldRaiseToneMark = isToneMark && (hasTopVowelBefore || hasSaraAmAfter);
+
       return (
-        <span key={index} className={`${colorClass} ${index === typedText.length ? 'border-b-2 border-blue-500 animate-pulse' : ''}`}>
+        <span
+          key={index}
+          className={`${colorClass} ${index === typedText.length ? 'border-b-2 border-blue-500 animate-pulse' : ''} ${shouldRaiseToneMark ? 'thai-tone-mark' : ''}`}
+        >
           {char === ' ' && index >= typedText.length ? '\u00A0' : char}
         </span>
       );
