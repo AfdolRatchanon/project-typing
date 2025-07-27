@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert } from 'lucide-react';
+import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert, Timer } from 'lucide-react';
 import './App.css';
 import { languages, scoringCriteria } from './data/data';
 
@@ -97,6 +97,7 @@ const fingerNamesDisplay: { [key: string]: string } = {
   rightThumb: 'นิ้วโป้งขวา',
   thumb: 'นิ้วโป้ง (ซ้าย/ขวา)',
 };
+
 
 // ===================================================================================
 // II. ฟังก์ชันผู้ช่วย (Helper Functions)
@@ -201,6 +202,9 @@ const App: React.FC = () => {
   const [totalTypedChars, setTotalTypedChars] = useState<number>(0);
   const [wpm, setWpm] = useState<number>(0);
   const [accuracy, setAccuracy] = useState<number>(0);
+  const [timeLimit, setTimeLimit] = useState<number | null>(null); // เวลาจำกัด (วินาที) หรือ null = ไม่จำกัด
+  const [remainingTime, setRemainingTime] = useState<number | null>(null); // เวลาที่เหลือ
+  const [isTimeUp, setIsTimeUp] = useState<boolean>(false); // สถานะหมดเวลา
 
   // State สำหรับคีย์บอร์ดและการแนะนำนิ้ว
   const [nextChar, setNextChar] = useState<string>('');
@@ -294,15 +298,26 @@ const App: React.FC = () => {
   }, [textToType, typedText, isCapsLockActive, currentSegmentIndex, segments]);
 
   /**
-   * @callback calculateWPM
-   * @description คำนวณความเร็วในการพิมพ์ (Words Per Minute)
-   * ใช้ useCallback เพื่อไม่ให้ฟังก์ชันถูกสร้างใหม่ทุกครั้งที่ re-render
-   */
-  const calculateWPM = useCallback((correctChars: number, timeInSeconds: number): number => {
+ * @callback calculateWPM
+ * @description คำนวณความเร็วในการพิมพ์ (Words Per Minute) 
+ * สำหรับภาษาไทยใช้ NWAM (Net Words a Minute) = (จำนวนดีดทั้งหมด/4 - จำนวนคำผิด*10) / เวลา(นาที)
+ * สำหรับภาษาอังกฤษใช้วิธีเดิม = ตัวอักษรถูกต้อง/5 / เวลา(นาที)
+ */
+  const calculateWPM = useCallback((correctChars: number, totalChars: number, errors: number, timeInSeconds: number, language: 'th' | 'en' = 'th'): number => {
     if (timeInSeconds === 0) return 0;
-    const words = correctChars / 5; // มาตรฐาน: 1 คำ = 5 ตัวอักษร
     const minutes = timeInSeconds / 60;
-    return Math.round(words / minutes);
+
+    if (language === 'th') {
+      // NWAM สำหรับภาษาไทย
+      const totalWords = totalChars / 4; // จำนวนดีดทั้งหมดหารด้วย 4
+      const errorPenalty = errors * 10; // จำนวนคำผิดคูณ 10
+      const netWords = Math.max(0, totalWords - errorPenalty); // ป้องกันค่าติดลบ
+      return Math.round(netWords / minutes);
+    } else {
+      // วิธีเดิมสำหรับภาษาอังกฤษ
+      const words = correctChars / 5;
+      return Math.round(words / minutes);
+    }
   }, []);
 
   /**
@@ -315,22 +330,143 @@ const App: React.FC = () => {
   }, []);
 
   /**
+   * @function getDefaultCriteria
+   * @description สร้างเกณฑ์การให้คะแนนพื้นฐานตามประเภทของด่าน
+   */
+  const getDefaultCriteria = useCallback(() => {
+    // ตรวจสอบว่าด่านปัจจุบันมีเวลาจำกัดหรือไม่
+    let currentLevelTimeLimit = null;
+    for (const language of languages) {
+      for (const unit of language.units) {
+        for (const session of unit.sessions) {
+          const selectedLevel = session.levels.find(level => level.id === currentLevelId);
+          if (selectedLevel) {
+            currentLevelTimeLimit = selectedLevel.timeLimit;
+            break;
+          }
+        }
+      }
+    }
+
+    // ถ้าไม่มีเวลาจำกัด ใช้เกณฑ์ตามจำนวนข้อผิดพลาด
+    if (!currentLevelTimeLimit) {
+      return [
+        { minWPM: 0, maxErrors: 0, score10Point: 10 },
+        { minWPM: 0, maxErrors: 1, score10Point: 9 },
+        { minWPM: 0, maxErrors: 2, score10Point: 8 },
+        { minWPM: 0, maxErrors: 3, score10Point: 7 },
+        { minWPM: 0, maxErrors: 4, score10Point: 6 },
+        { minWPM: 0, maxErrors: 5, score10Point: 5 },
+        { minWPM: 0, maxErrors: 6, score10Point: 4 },
+        { minWPM: 0, maxErrors: 7, score10Point: 3 },
+        { minWPM: 0, maxErrors: 8, score10Point: 2 },
+        { minWPM: 0, maxErrors: 9, score10Point: 1 },
+        { minWPM: 0, maxErrors: 10, score10Point: 0 },
+      ];
+    }
+
+    // ถ้ามีเวลาจำกัด ใช้เกณฑ์ตาม WPM
+    return [
+      { minWPM: 20, maxErrors: 0, score10Point: 10 },
+      { minWPM: 18, maxErrors: 0, score10Point: 9 },
+      { minWPM: 16, maxErrors: 0, score10Point: 8 },
+      { minWPM: 14, maxErrors: 0, score10Point: 7 },
+      { minWPM: 12, maxErrors: 0, score10Point: 6 },
+      { minWPM: 10, maxErrors: 0, score10Point: 5 },
+      { minWPM: 8, maxErrors: 0, score10Point: 4 },
+      { minWPM: 6, maxErrors: 0, score10Point: 3 },
+      { minWPM: 4, maxErrors: 0, score10Point: 2 },
+      { minWPM: 2, maxErrors: 0, score10Point: 1 },
+      { minWPM: 0, maxErrors: 0, score10Point: 0 },
+    ];
+  }, [currentLevelId, languages]);
+
+  /**
    * @callback getGrade
-   * @description คำนวณเกรดที่ได้ตามเกณฑ์ของด่านปัจจุบัน
+   * @description คำนวณเกรดที่ได้ตามเกณฑ์ของด่านปัจจุบัน (รองรับ optional fields และเกณฑ์พื้นฐาน)
    */
   const getGrade = useCallback((): string => {
     if (!isFinished) return '-';
-    const currentLevelCriteria = scoringCriteria[currentLevelId];
-    if (!currentLevelCriteria) return 'ไม่มีเกณฑ์การให้คะแนน';
+
+    // ใช้เกณฑ์ที่กำหนดไว้ หรือเกณฑ์พื้นฐาน
+    const currentLevelCriteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
 
     for (const criteria of currentLevelCriteria) {
-      if (wpm >= criteria.minWPM && accuracy >= criteria.minAccuracy && totalErrors <= criteria.maxErrors) {
-        return criteria.grade;
+      // ตรวจสอบ WPM และ maxErrors เสมอ
+      const wpmPassed = wpm >= criteria.minWPM;
+      const errorsPassed = totalErrors <= criteria.maxErrors;
+
+      // ตรวจสอบ accuracy เฉพาะเมื่อมีการกำหนดไว้
+      const accuracyPassed = criteria.minAccuracy === undefined || accuracy >= criteria.minAccuracy;
+
+      if (wpmPassed && errorsPassed && accuracyPassed) {
+        // ถ้ามี grade ที่กำหนดไว้ ให้ใช้ grade นั้น ถ้าไม่มีให้สร้างจากคะแนน
+        return criteria.grade || `${criteria.score10Point} คะแนน`;
       }
     }
     return 'ต้องฝึกเพิ่ม';
-  }, [currentLevelId, wpm, accuracy, totalErrors, isFinished]);
+  }, [currentLevelId, wpm, accuracy, totalErrors, isFinished, getDefaultCriteria]);
 
+
+  /**
+   * @callback getScore10Point
+   * @description คำนวณคะแนน 10 คะแนนตาม WPM ที่ได้ (รองรับ optional fields และเกณฑ์พื้นฐาน)
+   */
+  const getScore10Point = useCallback((): number => {
+    if (!isFinished) return 0;
+
+    // ใช้เกณฑ์ที่กำหนดไว้ หรือเกณฑ์พื้นฐาน
+    const currentLevelCriteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
+
+    // หาเกณฑ์ที่ตรงกับผลการพิมพ์
+    for (const criteria of currentLevelCriteria) {
+      const wpmPassed = wpm >= criteria.minWPM;
+      const errorsPassed = totalErrors <= criteria.maxErrors;
+      const accuracyPassed = criteria.minAccuracy === undefined || accuracy >= criteria.minAccuracy;
+
+      if (wpmPassed && errorsPassed && accuracyPassed) {
+        return criteria.score10Point;
+      }
+    }
+    return 0; // ถ้าไม่เข้าเกณฑ์ใดเลย
+  }, [currentLevelId, wpm, accuracy, totalErrors, isFinished, getDefaultCriteria]);
+
+  const handleTimeUp = useCallback(() => {
+    setIsTimeUp(true);
+    setIsStarted(false);
+    setIsFinished(true);
+
+    // คำนวณคะแนนจากสถานะปัจจุบัน
+    const currentCorrectChars = typedText.split('')
+      .filter((char, index) => char === textToType[index]).length;
+    const currentTotalChars = typedText.length;
+    const currentErrors = currentTotalChars - currentCorrectChars; // แก้ไขตรงนี้
+
+    // คำนวณคะแนนรวมทั้งหมด (รวม segments ที่ผ่านมาแล้ว + segment ปัจจุบัน)
+    const finalTotalCorrect = totalCorrectChars + currentCorrectChars;
+    const finalTotalTyped = totalTypedChars + currentTotalChars;
+    const finalTotalErrors = totalErrors + currentErrors;
+
+    // อัปเดตค่าสถิติ
+    setTotalCorrectChars(finalTotalCorrect);
+    setTotalTypedChars(finalTotalTyped);
+    setTotalErrors(finalTotalErrors);
+
+    // ใช้ timeLimit สำหรับ WPM เมื่อหมดเวลา
+    setWpm(calculateWPM(finalTotalCorrect, finalTotalTyped, finalTotalErrors, timeLimit!, 'th'));
+    setAccuracy(calculateAccuracy(finalTotalCorrect, finalTotalTyped));
+
+    // Debug log เพื่อตรวจสอบค่า - เพิ่มใหม่
+    console.log('Time up debug:', {
+      currentSegment: currentSegmentIndex,
+      typedInCurrentSegment: typedText.length,
+      correctInCurrentSegment: currentCorrectChars,
+      totalCorrectFromPrevious: totalCorrectChars,
+      finalTotalCorrect,
+      timeLimit
+    });
+  }, [typedText, textToType, totalCorrectChars, totalTypedChars,
+    totalErrors, timeLimit, calculateWPM, calculateAccuracy, currentSegmentIndex]); // เพิ่ม currentSegmentIndex
   // ---------------------------------------------------------------------------------
   // D. Effects (การจัดการ Side Effects)
   // ---------------------------------------------------------------------------------
@@ -360,24 +496,6 @@ const App: React.FC = () => {
       resetGameStates(); // รีเซ็ตสถานะทั้งหมดของเกม
     }
   }, [fullTextContent]);
-
-  // Effect: จัดการการทำงานของตัวจับเวลา
-  useEffect(() => {
-    if (isStarted && !isPaused && !isFinished) {
-      intervalRef.current = window.setInterval(() => {
-        setTimer(prevTimer => prevTimer + 1);
-      }, 1000);
-    } else if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    // Cleanup function: จะทำงานเมื่อ component unmount หรือ dependencies เปลี่ยน
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [isStarted, isPaused, isFinished]);
 
   // Effect: อัปเดต state จาก `typingGuidance` ที่คำนวณไว้
   useEffect(() => {
@@ -420,7 +538,57 @@ const App: React.FC = () => {
       }
     }
   }, [currentLevelId]);
+  // Effect: โหลดเวลาจำกัดเมื่อเปลี่ยนด่าน
+  useEffect(() => {
+    for (const language of languages) {
+      for (const unit of language.units) {
+        for (const session of unit.sessions) {
+          const selectedLevel = session.levels.find(level => level.id === currentLevelId);
+          if (selectedLevel) {
+            const limit = selectedLevel.timeLimit || null;
+            setTimeLimit(limit);
+            setRemainingTime(limit);
+            setIsTimeUp(false);
+            return;
+          }
+        }
+      }
+    }
+  }, [currentLevelId]);
 
+  // Effect: จับเวลาถอยหลังสำหรับเวลาจำกัด
+  useEffect(() => {
+    if (isStarted && !isPaused && !isFinished && !isTimeUp) {
+      intervalRef.current = window.setInterval(() => {
+        // อัปเดตเวลาที่ใช้
+        setTimer(prevTimer => prevTimer + 1);
+
+        // จัดการเวลาถอยหลัง (ถ้ามี)
+        if (timeLimit !== null) {
+          setRemainingTime(prevTime => {
+            if (prevTime !== null && prevTime <= 1) {
+              // หมดเวลา
+              handleTimeUp();
+              return 0;
+            }
+            return prevTime !== null ? prevTime - 1 : null;
+          });
+        }
+      }, 1000);
+    } else {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [isStarted, isPaused, isFinished, isTimeUp, timeLimit]);
 
   // ---------------------------------------------------------------------------------
   // E. Event Handlers & Game Logic (ฟังก์ชันจัดการเหตุการณ์และตรรกะของเกม)
@@ -430,7 +598,14 @@ const App: React.FC = () => {
    * @function resetGameStates
    * @description รีเซ็ตสถานะทั้งหมดของเกมกลับไปเป็นค่าเริ่มต้น
    */
-  const resetGameStates = () => {
+  const resetGameStates = useCallback(() => {
+    // ล้าง interval ก่อน
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+
+    // รีเซ็ต state
     setTypedText('');
     setStartTime(null);
     setTimer(0);
@@ -440,17 +615,16 @@ const App: React.FC = () => {
     setIsStarted(false);
     setIsPaused(false);
     setIsFinished(false);
+    setIsTimeUp(false);
     setWpm(0);
     setAccuracy(0);
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+    setRemainingTime(timeLimit); // รีเซ็ตเวลาที่เหลือ
+
     setCurrentSegmentIndex(0);
     if (inputRef.current) {
       inputRef.current.focus();
     }
-  };
+  }, [timeLimit]);
 
   /**
    * @function handleResetGame
@@ -504,7 +678,7 @@ const App: React.FC = () => {
       setStartTime(Date.now());
     }
 
-    if (isPaused || isFinished) return;
+    if (isPaused || isFinished || isTimeUp) return;
 
     // กรณีที่ 1: พิมพ์ครบ segment และกด space bar เพื่อไป segment ถัดไป
     if (value.length === textToType.length + 1 && value.endsWith(' ')) {
@@ -530,7 +704,7 @@ const App: React.FC = () => {
         setIsFinished(true);
         setIsStarted(false);
         const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
-        setWpm(calculateWPM(newTotalCorrectChars, timeTaken));
+        setWpm(calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th'));
         setAccuracy(calculateAccuracy(newTotalCorrectChars, newTotalTypedChars));
       }
       return;
@@ -551,14 +725,17 @@ const App: React.FC = () => {
       const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment;
       const newTotalTypedChars = totalTypedChars + textToType.length;
       const newTotalErrors = totalErrors + errorsInSegment;
+
       setTotalCorrectChars(newTotalCorrectChars);
       setTotalTypedChars(newTotalTypedChars);
       setTotalErrors(newTotalErrors);
 
       setIsFinished(true);
       setIsStarted(false);
+
+      // ใช้เวลาจริงที่ใช้ในการพิมพ์ ไม่ใช่ timeLimit
       const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
-      setWpm(calculateWPM(newTotalCorrectChars, timeTaken));
+      setWpm(calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th'));
       setAccuracy(calculateAccuracy(newTotalCorrectChars, newTotalTypedChars));
     }
   };
@@ -607,6 +784,28 @@ const App: React.FC = () => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  /**
+ * @function formatTimeWithColor
+ * @description แปลงเวลาเป็นรูปแบบ MM:SS พร้อมกำหนดสีตามเวลาที่เหลือ
+ */
+  const formatTimeWithColor = (seconds: number | null, isCountdown: boolean = false) => {
+    if (seconds === null) return { time: '∞', color: 'text-blue-600' };
+
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+
+    let colorClass = 'text-blue-600';
+    if (isCountdown && timeLimit !== null) {
+      const percentage = (seconds / timeLimit) * 100;
+      if (percentage <= 10) colorClass = 'text-red-600 animate-pulse';
+      else if (percentage <= 25) colorClass = 'text-orange-600';
+      else if (percentage <= 50) colorClass = 'text-yellow-600';
+    }
+
+    return { time: timeString, color: colorClass };
   };
 
   /**
@@ -787,12 +986,24 @@ const App: React.FC = () => {
       {/* ======================= ส่วนเนื้อหาหลัก (ขวา) ======================= */}
       <main className="bg-white p-4 lg:p-8 rounded-xl lg:rounded-2xl shadow-2xl flex-1 border border-gray-200 min-h-0">
         {/* แถบแสดงสถิติ */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 lg:gap-4 mb-4 lg:mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-4 mb-4 lg:mb-6">
           <div className="bg-blue-50 p-3 lg:p-4 rounded-lg shadow-md border border-blue-200 flex items-center justify-center space-x-2">
             <Clock className="text-blue-600" size={18} />
             <p className="text-lg lg:text-xl font-bold text-blue-800">{formatTime(timer)}</p>
-            <p className="text-xs lg:text-sm font-medium text-blue-700">เวลา</p>
+            <p className="text-xs lg:text-sm font-medium text-blue-700">เวลาที่ใช้</p>
           </div>
+
+          {/* เพิ่มช่องแสดงเวลาที่เหลือ/จำกัด */}
+          <div className="bg-indigo-50 p-3 lg:p-4 rounded-lg shadow-md border border-indigo-200 flex items-center justify-center space-x-2">
+            <Timer className="text-indigo-600" size={18} />
+            <p className={`text-lg lg:text-xl font-bold ${formatTimeWithColor(remainingTime, true).color}`}>
+              {formatTimeWithColor(remainingTime, true).time}
+            </p>
+            <p className="text-xs lg:text-sm font-medium text-indigo-700">
+              {timeLimit ? 'เหลือ' : 'ไม่จำกัด'}
+            </p>
+          </div>
+
           <div className="bg-green-50 p-3 lg:p-4 rounded-lg shadow-md border border-green-200 flex items-center justify-center space-x-2">
             <Target className="text-green-600" size={18} />
             <p className="text-lg lg:text-xl font-bold text-green-800">{wpm}</p>
@@ -882,47 +1093,109 @@ const App: React.FC = () => {
 
         {/* ส่วนแสดงผลลัพธ์เมื่อจบเกม */}
         {isFinished && (
-          <div className="mt-4 lg:mt-6 bg-green-50 border border-green-200 p-4 lg:p-6 rounded-lg">
-            <h3 className="text-xl font-bold text-green-800 mb-4 text-center">🎉 ยินดีด้วย! คุณพิมพ์เสร็จแล้ว</h3>
+          <div className={`mt-4 lg:mt-6 p-4 lg:p-6 rounded-lg ${isTimeUp ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
+            <h3 className={`text-xl font-bold mb-4 text-center ${isTimeUp ? 'text-orange-800' : 'text-green-800'}`}>
+              {isTimeUp ? '⏰ หมดเวลา!' : '🎉 ยินดีด้วย! คุณพิมพ์เสร็จแล้ว'}
+            </h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
-              <div><div className="text-2xl font-bold text-green-600">{formatTime(timer)}</div><div className="text-sm text-gray-600">เวลาทั้งหมด</div></div>
-              <div><div className="text-2xl font-bold text-green-600">{wpm}</div><div className="text-sm text-gray-600">คำต่อนาที</div></div>
-              <div><div className="text-2xl font-bold text-green-600">{accuracy}%</div><div className="text-sm text-gray-600">ความถูกต้อง</div></div>
-              <div><div className="text-2xl font-bold text-green-600">{totalErrors}</div><div className="text-sm text-gray-600">ข้อผิดพลาด</div></div>
+              <div>
+                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>
+                  {/* แก้ไขการแสดงเวลา */}
+                  {isTimeUp ? formatTime(timeLimit || timer) : formatTime(timer)}
+                </div>
+                <div className="text-sm text-gray-600">
+                  {isTimeUp ? 'เวลาที่กำหนด' : 'เวลาที่ใช้'}
+                </div>
+              </div>
+              <div>
+                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>{wpm}</div>
+                <div className="text-sm text-gray-600">คำต่อนาที</div>
+              </div>
+              <div>
+                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>{accuracy}%</div>
+                <div className="text-sm text-gray-600">ความถูกต้อง</div>
+              </div>
+              <div>
+                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>{totalErrors}</div>
+                <div className="text-sm text-gray-600">ข้อผิดพลาด</div>
+              </div>
             </div>
-            <p className="text-lg font-semibold text-green-700 text-center">เกรด: <span className="text-green-900 font-bold text-xl">{getGrade()}</span></p>
+            {isTimeUp && (
+              <div className="mb-4 p-3 bg-orange-100 rounded-lg border border-orange-300">
+                <p className="text-orange-800 text-center font-medium">
+                  📊 คะแนนจากจำนวนที่พิมพ์ได้: {totalCorrectChars} ตัวอักษรถูกต้อง จาก {totalTypedChars} ตัวที่พิมพ์
+                </p>
+                <p className="text-orange-700 text-center text-sm mt-1">
+                  ความคืบหน้า: {totalProgress} / {fullTextContent.length} ตัวอักษรทั้งหมด
+                </p>
+              </div>
+            )}
+            <p className={`text-lg font-semibold text-center ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
+              เกรด: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getGrade()}</span>
+            </p>
+            <p className={`text-lg font-semibold text-center mt-2 ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
+              คะแนน: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getScore10Point()}/10</span>
+            </p>
           </div>
         )}
 
+
         {/* ส่วนแสดงเกณฑ์การให้คะแนน */}
         <div className="mt-4 lg:mt-6 bg-gray-50 p-4 lg:p-6 rounded-lg border border-gray-200">
-          <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-3 lg:mb-4 text-center">เกณฑ์การให้คะแนนสำหรับ "{currentLevel?.name || 'กำลังโหลด...'}":</h2>
-          {scoringCriteria[currentLevelId] ? (
+          <div className="mt-4 lg:mt-6 bg-gray-50 p-4 lg:p-6 rounded-lg border border-gray-200">
+            <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-3 lg:mb-4 text-center">
+              เกณฑ์การให้คะแนนสำหรับ "{currentLevel?.name || 'กำลังโหลด...'}"
+              {timeLimit && (
+                <div className="text-sm font-medium text-indigo-600 mt-1">
+                  ⏱️ เวลาที่กำหนด: {Math.floor(timeLimit / 60)} นาที {timeLimit % 60 !== 0 ? `${timeLimit % 60} วินาที` : ''}
+                </div>
+              )}
+            </h2>
             <div className="overflow-x-auto">
-              <table className="min-w-full bg-white rounded-lg shadow-sm">
-                <thead>
-                  <tr className="bg-gray-200 text-gray-700 uppercase text-xs lg:text-sm leading-normal">
-                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tl-lg">เกรด</th>
-                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">WPM ขั้นต่ำ</th>
-                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">ความแม่นยำขั้นต่ำ (%)</th>
-                    <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tr-lg">ข้อผิดพลาดสูงสุด</th>
-                  </tr>
-                </thead>
-                <tbody className="text-gray-600 text-xs lg:text-sm font-light">
-                  {scoringCriteria[currentLevelId].map((criteria, index) => (
-                    <tr key={index} className="border-b border-gray-200 hover:bg-gray-100">
-                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left whitespace-nowrap font-medium">{criteria.grade}</td>
-                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{criteria.minWPM}</td>
-                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{criteria.minAccuracy}</td>
-                      <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{criteria.maxErrors}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {(() => {
+                const criteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
+
+                // ตรวจสอบว่าคอลัมน์ไหนควรแสดง
+                const showWPM = criteria.some(c => c.minWPM > 0);
+                const showMaxErrors = criteria.some(c => c.maxErrors !== undefined && c.maxErrors > 0);
+                const showAccuracy = criteria.some(c => c.minAccuracy !== undefined && c.minAccuracy > 0);
+                const showGrade = criteria.some(c => c.grade && c.grade.trim() !== '');
+                const showScore = true; // แสดงคะแนนเสมอ
+
+                return (
+                  <table className="min-w-full bg-white rounded-lg shadow-sm">
+                    <thead>
+                      <tr className="bg-gray-200 text-gray-700 uppercase text-xs lg:text-sm leading-normal">
+                        {showWPM && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tl-lg">WPM ขั้นต่ำ</th>}
+                        {showMaxErrors && <th className="py-2 px-3 lg:py-3 lg:px-6 rounded-tl-lg text-left">ข้อผิดพลาดสูงสุด</th>}
+                        {showAccuracy && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">ความแม่นยำขั้นต่ำ (%)</th>}
+                        {showGrade && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">เกรด</th>}
+                        {showScore && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tr-lg">คะแนน</th>}
+                      </tr>
+                    </thead>
+                    <tbody className="text-gray-600 text-xs lg:text-sm font-light">
+                      {criteria.map((c, index) => (
+                        <tr key={index} className="border-b border-gray-200 hover:bg-gray-100">
+                          {showWPM && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left font-bold text-red-600">{c.minWPM}</td>}
+                          {showMaxErrors && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left font-bold text-red-600">{c.maxErrors}</td>}
+                          {showAccuracy && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{c.minAccuracy || '-'}</td>}
+                          {showGrade && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left whitespace-nowrap font-medium">{c.grade || '-'}</td>}
+                          {showScore && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left font-bold text-blue-600">{c.score10Point}</td>}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                );
+              })()}
+              {!scoringCriteria[currentLevelId] && (
+                <p className="text-xs text-gray-500 mt-2 text-center">
+                  * ใช้เกณฑ์การให้คะแนนพื้นฐาน {timeLimit ? '(มีเวลาจำกัด)' : '(ไม่จำกัดเวลา)'}
+                </p>
+              )}
             </div>
-          ) : (
-            <p className="text-center text-gray-600 text-sm lg:text-base">ไม่มีเกณฑ์การให้คะแนนสำหรับด่านนี้</p>
-          )}
+          </div>
+
+
         </div>
       </main>
     </div>

@@ -3,6 +3,11 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "author": {
+    "name": "Ratchanon Semsayan",
+    "email": "afdolcom79@gmail.com"
+  },
+  "license": "AFDOL79",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",

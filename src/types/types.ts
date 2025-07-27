@@ -1,9 +1,9 @@
 
-// Define types for better type safety and code readability
 export interface Level {
     id: string;
     name: string;
     text: string;
+    timeLimit?: number; // เวลาจำกัดเป็นวินาที (ถ้าไม่กำหนดจะเป็น infinity)
 }
 
 export interface Session {
@@ -24,18 +24,18 @@ export interface Language {
     units: Unit[];
 }
 
-export interface TimerConfig {
-    duration: number; // milliseconds, Infinity สำหรับไม่จำกัดเวลา
-    label: string;
-}
-
-export interface ScoringCriteria {
+export interface ScoringCriterion {
     minWPM: number;
-    minAccuracy: number;
+    minAccuracy?: number;
     maxErrors: number;
-    grade: string;
+    grade?: string;
+    score10Point: number;
 }
 
 export interface LevelScoring {
-    [levelId: string]: ScoringCriteria[];
+    [levelId: string]: ScoringCriterion[];
+}
+
+export interface TimerConfig {
+    [levelId: string]: number; // เวลาเป็นวินาที
 }
