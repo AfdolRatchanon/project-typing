@@ -819,7 +819,7 @@ const App: React.FC = () => {
     const isLastSegment = currentSegmentIndex === segments.length - 1;
     const isTypingComplete = typedText.length === textToType.length;
 
-    const toneMarks = ['่', '้', '๊', '๋', '็', 'ั'];
+    const toneMarks = ['่', '้', '๊', '๋',];
     const topVowels = ['ิ', 'ี', 'ึ', 'ื', '์', 'ั'];
     const saraAm = 'ำ';
     const tailConsonants = ['ป', 'ฝ', 'ฟ', 'ฬ']; // เพิ่มบรรทัดนี้
