@@ -1,44 +1,25 @@
 @import "tailwindcss";
-/* .thai-tone-mark {
+/* สำหรับ วรรณยุกต์ ให้ขยับสูงขึ้น */
+.thai-tone-mark {
   position: relative;
   top: -0.3em;
   display: inline-block;
-} */
-
-@keyframes warning-pulse {
-  0%, 100% {
-    background-color: #fef2f2;
-    border-color: #fca5a5;
-  }
-  50% {
-    background-color: #fee2e2;
-    border-color: #f87171;
-  }
 }
 
-.time-warning {
-  animation: warning-pulse 1s ease-in-out infinite;
+.thai-tone-mark-left {
+  position: relative;
+  left: -0.2em;
+  display: inline-block;
 }
 
-/* Animation สำหรับตัวเลขนับถอยหลัง */
-@keyframes countdown-pulse {
-  0%, 100% {
-    transform: scale(1);
-  }
-  50% {
-    transform: scale(1.1);
-  }
+.niramit-regular {
+  font-family: "Niramit", sans-serif;
+  font-weight: 400;
+  font-style: normal;
 }
 
-.countdown-warning {
-  animation: countdown-pulse 0.5s ease-in-out infinite;
-}
-
-/* Gradient สำหรับ Timer Display */
-.timer-gradient {
-  background: linear-gradient(135deg, #f59e0b, #d97706);
-}
-
-.timer-warning-gradient {
-  background: linear-gradient(135deg, #dc2626, #b91c1c);
+.niramit-bold {
+  font-family: "Niramit", sans-serif;
+  font-weight: 700;
+  font-style: normal;
 }
