@@ -1,3 +1,4 @@
+// App.tsx
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert, Timer } from 'lucide-react';
 import './App.css';
@@ -29,7 +30,7 @@ const keyDisplays = {
   en: {
     unshifted: {
       '`': '`', '1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '0': '0', '-': '-', '=': '=',
-      'q': 'q', 'w': 'w', 'e': 'e', 'r': 'r', 't': 't', 'y': 'y', 'u': 'u', 'i': 'i', 'o': 'o', 'p': 'p', '[': '[', ']': ']', '\\': '\\',
+      'q': 'q', 'w': 'w', 'e': 'e', 'r': 'r', 't': 't', 'y': 'y', 'u': 'u', 'i': 'i', 'o': 'o', 'p': 'p', '[': '[', ']': '}', '\\': '\\',
       'a': 'a', 's': 's', 'd': 'd', 'f': 'f', 'g': 'g', 'h': 'h', 'j': 'j', 'k': 'k', 'l': 'l', ';': ';', "'": "'",
       'z': 'z', 'x': 'x', 'c': 'c', 'v': 'v', 'b': 'b', 'n': 'n', 'm': 'm', ',': ',', '.': '.', '/': '/',
       'Space': ' ',
@@ -225,6 +226,26 @@ const App: React.FC = () => {
   const intervalRef = useRef<number | null>(null); // เก็บ ID ของ interval ที่ใช้จับเวลา
   const inputRef = useRef<HTMLTextAreaElement>(null); // อ้างอิงถึง <textarea> เพื่อ focus
 
+  // Refs สำหรับค่าที่เปลี่ยนแปลงบ่อย เพื่อให้ useCallback ไม่ต้อง re-create บ่อยๆ
+  const typedTextRef = useRef(typedText);
+  const totalErrorsRef = useRef(totalErrors);
+  const totalCorrectCharsRef = useRef(totalCorrectChars);
+  const timerRef = useRef(timer);
+  const currentSegmentIndexRef = useRef(currentSegmentIndex);
+  const segmentsRef = useRef(segments);
+  const textToTypeRef = useRef(textToType);
+
+
+  // Effect เพื่ออัปเดต Ref เมื่อ State เปลี่ยน
+  useEffect(() => { typedTextRef.current = typedText; }, [typedText]);
+  useEffect(() => { totalErrorsRef.current = totalErrors; }, [totalErrors]);
+  useEffect(() => { totalCorrectCharsRef.current = totalCorrectChars; }, [totalCorrectChars]);
+  useEffect(() => { timerRef.current = timer; }, [timer]);
+  useEffect(() => { currentSegmentIndexRef.current = currentSegmentIndex; }, [currentSegmentIndex]);
+  useEffect(() => { segmentsRef.current = segments; }, [segments]);
+  useEffect(() => { textToTypeRef.current = textToType; }, [textToType]);
+
+
   // ---------------------------------------------------------------------------------
   // C. Memoization & Callbacks (การเพิ่มประสิทธิภาพ)
   // ---------------------------------------------------------------------------------
@@ -298,19 +319,19 @@ const App: React.FC = () => {
   }, [textToType, typedText, isCapsLockActive, currentSegmentIndex, segments]);
 
   /**
- * @callback calculateWPM
- * @description คำนวณความเร็วในการพิมพ์ (Words Per Minute) 
- * สำหรับภาษาไทยใช้ NWAM (Net Words a Minute) = (จำนวนดีดทั้งหมด/4 - จำนวนคำผิด*10) / เวลา(นาที)
- * สำหรับภาษาอังกฤษใช้วิธีเดิม = ตัวอักษรถูกต้อง/5 / เวลา(นาที)
- */
-  const calculateWPM = useCallback((correctChars: number, totalChars: number, errors: number, timeInSeconds: number, language: 'th' | 'en' = 'th'): number => {
+   * @callback calculateWPM
+   * @description คำนวณความเร็วในการพิมพ์ (Words Per Minute)
+   * สำหรับภาษาไทยใช้ NWAM (Net Words a Minute) = (จำนวนดีดทั้งหมด/4 - จำนวนคำผิด*10) / เวลา(นาที)
+   * สำหรับภาษาอังกฤษใช้วิธีเดิม = ตัวอักษรถูกต้อง/5 / เวลา(นาที)
+   */
+  const calculateWPM = useCallback((correctChars: number, totalTypedCharsCount: number, actualErrors: number, timeInSeconds: number, language: 'th' | 'en' = 'th'): number => {
     if (timeInSeconds === 0) return 0;
     const minutes = timeInSeconds / 60;
 
     if (language === 'th') {
-      // NWAM สำหรับภาษาไทย
-      const totalWords = totalChars / 4; // จำนวนดีดทั้งหมดหารด้วย 4
-      const errorPenalty = errors * 10; // จำนวนคำผิดคูณ 10
+      // NWAM สำหรับภาษาไทย - ใช้จำนวนที่พิมพ์ได้จริงเป็นฐาน
+      const totalWords = totalTypedCharsCount / 4; // จำนวนดีดที่พิมพ์ได้จริงหารด้วย 4
+      const errorPenalty = actualErrors * 10; // จำนวนข้อผิดจริง (พิมพ์ผิด) คูณ 10
       const netWords = Math.max(0, totalWords - errorPenalty); // ป้องกันค่าติดลบ
       return Math.round(netWords / minutes);
     } else {
@@ -432,41 +453,45 @@ const App: React.FC = () => {
   }, [currentLevelId, wpm, accuracy, totalErrors, isFinished, getDefaultCriteria]);
 
   const handleTimeUp = useCallback(() => {
+    // ป้องกันการเรียกซ้ำ
+    if (isTimeUp || isFinished) return;
+
     setIsTimeUp(true);
     setIsStarted(false);
     setIsFinished(true);
 
-    // คำนวณคะแนนจากสถานะปัจจุบัน
-    const currentCorrectChars = typedText.split('')
-      .filter((char, index) => char === textToType[index]).length;
-    const currentTotalChars = typedText.length;
-    const currentErrors = currentTotalChars - currentCorrectChars; // แก้ไขตรงนี้
+    // คำนวณความคืบหน้าปัจจุบันจาก ref
+    let completedCharsFromPreviousSegments = 0;
+    for (let i = 0; i < currentSegmentIndexRef.current; i++) {
+      completedCharsFromPreviousSegments += segmentsRef.current[i].length + 1;
+    }
+    const currentTotalProgress = completedCharsFromPreviousSegments + typedTextRef.current.length;
 
-    // คำนวณคะแนนรวมทั้งหมด (รวม segments ที่ผ่านมาแล้ว + segment ปัจจุบัน)
-    const finalTotalCorrect = totalCorrectChars + currentCorrectChars;
-    const finalTotalTyped = totalTypedChars + currentTotalChars;
-    const finalTotalErrors = totalErrors + currentErrors;
+    // คำนวณข้อผิดในส่วนปัจจุบันจาก ref
+    const currentCorrectChars = typedTextRef.current.split('')
+      .filter((char, index) => char === textToTypeRef.current[index]).length;
+    const currentActualErrors = typedTextRef.current.length - currentCorrectChars;
 
-    // อัปเดตค่าสถิติ
+    // รวมคะแนนทั้งหมดจาก ref
+    const finalTotalCorrect = totalCorrectCharsRef.current + currentCorrectChars;
+    const finalActualErrors = totalErrorsRef.current + currentActualErrors;
+
+    // ใช้เวลาที่แท้จริงที่ผ่านไปจาก ref
+    const actualTimeUsed = startTime ? (Date.now() - startTime) / 1000 : timeLimit || timerRef.current;
+
+    // คำนวณ WPM โดยส่ง currentTotalProgress โดยตรง
+    const finalWPM = calculateWPM(finalTotalCorrect, currentTotalProgress, finalActualErrors, actualTimeUsed, 'th');
+    const finalAccuracy = calculateAccuracy(finalTotalCorrect, currentTotalProgress);
+
+    // อัปเดตค่าสถิติ - ใช้ currentTotalProgress
     setTotalCorrectChars(finalTotalCorrect);
-    setTotalTypedChars(finalTotalTyped);
-    setTotalErrors(finalTotalErrors);
+    setTotalTypedChars(currentTotalProgress);
+    setTotalErrors(finalActualErrors);
+    setWpm(finalWPM);
+    setAccuracy(finalAccuracy);
 
-    // ใช้ timeLimit สำหรับ WPM เมื่อหมดเวลา
-    setWpm(calculateWPM(finalTotalCorrect, finalTotalTyped, finalTotalErrors, timeLimit!, 'th'));
-    setAccuracy(calculateAccuracy(finalTotalCorrect, finalTotalTyped));
+  }, [startTime, timeLimit, isTimeUp, isFinished, calculateWPM, calculateAccuracy]); // Dependencies should be stable
 
-    // Debug log เพื่อตรวจสอบค่า - เพิ่มใหม่
-    console.log('Time up debug:', {
-      currentSegment: currentSegmentIndex,
-      typedInCurrentSegment: typedText.length,
-      correctInCurrentSegment: currentCorrectChars,
-      totalCorrectFromPrevious: totalCorrectChars,
-      finalTotalCorrect,
-      timeLimit
-    });
-  }, [typedText, textToType, totalCorrectChars, totalTypedChars,
-    totalErrors, timeLimit, calculateWPM, calculateAccuracy, currentSegmentIndex]); // เพิ่ม currentSegmentIndex
   // ---------------------------------------------------------------------------------
   // D. Effects (การจัดการ Side Effects)
   // ---------------------------------------------------------------------------------
@@ -561,14 +586,17 @@ const App: React.FC = () => {
     if (isStarted && !isPaused && !isFinished && !isTimeUp) {
       intervalRef.current = window.setInterval(() => {
         // อัปเดตเวลาที่ใช้
-        setTimer(prevTimer => prevTimer + 1);
+        setTimer(prevTimer => {
+          timerRef.current = prevTimer + 1; // อัปเดต ref ด้วย
+          return prevTimer + 1;
+        });
 
         // จัดการเวลาถอยหลัง (ถ้ามี)
         if (timeLimit !== null) {
           setRemainingTime(prevTime => {
             if (prevTime !== null && prevTime <= 1) {
               // หมดเวลา
-              handleTimeUp();
+              handleTimeUp(); // เรียกใช้ handleTimeUp
               return 0;
             }
             return prevTime !== null ? prevTime - 1 : null;
@@ -588,7 +616,7 @@ const App: React.FC = () => {
         intervalRef.current = null;
       }
     };
-  }, [isStarted, isPaused, isFinished, isTimeUp, timeLimit]);
+  }, [isStarted, isPaused, isFinished, isTimeUp, timeLimit, handleTimeUp]); // handleTimeUp ควรจะ stable แล้ว
 
   // ---------------------------------------------------------------------------------
   // E. Event Handlers & Game Logic (ฟังก์ชันจัดการเหตุการณ์และตรรกะของเกม)
@@ -605,12 +633,16 @@ const App: React.FC = () => {
       intervalRef.current = null;
     }
 
-    // รีเซ็ต state
+    // รีเซ็ต state และ ref
     setTypedText('');
+    typedTextRef.current = '';
     setStartTime(null);
     setTimer(0);
+    timerRef.current = 0;
     setTotalErrors(0);
+    totalErrorsRef.current = 0;
     setTotalCorrectChars(0);
+    totalCorrectCharsRef.current = 0;
     setTotalTypedChars(0);
     setIsStarted(false);
     setIsPaused(false);
@@ -621,6 +653,7 @@ const App: React.FC = () => {
     setRemainingTime(timeLimit); // รีเซ็ตเวลาที่เหลือ
 
     setCurrentSegmentIndex(0);
+    currentSegmentIndexRef.current = 0;
     if (inputRef.current) {
       inputRef.current.focus();
     }
@@ -638,7 +671,9 @@ const App: React.FC = () => {
           if (selectedLevel) {
             const newSegments = segmentText(selectedLevel.text);
             setSegments(newSegments);
+            segmentsRef.current = newSegments; // Update ref
             setTextToType(newSegments[0] || '');
+            textToTypeRef.current = (newSegments[0] || ''); // Update ref
             resetGameStates();
             return;
           }
@@ -667,6 +702,7 @@ const App: React.FC = () => {
   /**
    * @function handleInputChange
    * @description ตรรกะหลักของเกม ทำงานทุกครั้งที่ผู้ใช้พิมพ์ใน <textarea>
+   * แก้ไขให้นับเฉพาะข้อผิดจากการพิมพ์ผิด ไม่นับตัวอักษรที่ไม่ได้พิมพ์
    */
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -684,26 +720,36 @@ const App: React.FC = () => {
     if (value.length === textToType.length + 1 && value.endsWith(' ')) {
       const typedSegment = value.substring(0, textToType.length);
       const correctCharsInSegment = typedSegment.split('').filter((char, index) => char === textToType[index]).length;
-      const errorsInSegment = textToType.length - correctCharsInSegment;
+
+      // นับเฉพาะข้อผิดจากการพิมพ์ผิด
+      const actualErrorsInSegment = typedSegment.length - correctCharsInSegment; // จำนวนที่พิมพ์ผิดใน segment นี้
 
       // อัปเดตคะแนนรวม
       const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment + 1; // +1 for the space
-      const newTotalTypedChars = totalTypedChars + textToType.length + 1;
-      const newTotalErrors = totalErrors + errorsInSegment;
+      const newTotalTypedChars = totalTypedChars + textToType.length + 1; // รวม space ด้วย
+      const newTotalErrors = totalErrors + actualErrorsInSegment; // ใช้ actualErrors แทน
+
       setTotalCorrectChars(newTotalCorrectChars);
+      totalCorrectCharsRef.current = newTotalCorrectChars; // Update ref
       setTotalTypedChars(newTotalTypedChars);
       setTotalErrors(newTotalErrors);
+      totalErrorsRef.current = newTotalErrors; // Update ref
 
       // ไปยัง segment ถัดไป
       if (currentSegmentIndex + 1 < segments.length) {
         setCurrentSegmentIndex(prev => prev + 1);
+        currentSegmentIndexRef.current = currentSegmentIndex + 1; // Update ref
         setTextToType(segments[currentSegmentIndex + 1]);
+        textToTypeRef.current = segments[currentSegmentIndex + 1]; // Update ref
         setTypedText('');
+        typedTextRef.current = ''; // Update ref
       } else {
         // จบเกม
         setIsFinished(true);
         setIsStarted(false);
         const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
+
+        // ใช้ newTotalTypedChars ที่ถูกสะสม
         setWpm(calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th'));
         setAccuracy(calculateAccuracy(newTotalCorrectChars, newTotalTypedChars));
       }
@@ -716,19 +762,33 @@ const App: React.FC = () => {
     }
 
     setTypedText(value);
+    typedTextRef.current = value; // Update ref
 
     // กรณีที่ 2: พิมพ์ครบ segment สุดท้าย (จบเกม)
     if (value.length === textToType.length && currentSegmentIndex === segments.length - 1) {
       const correctCharsInSegment = value.split('').filter((char, index) => char === textToType[index]).length;
-      const errorsInSegment = textToType.length - correctCharsInSegment;
+
+      // นับเฉพาะข้อผิดจากการพิมพ์ผิด
+      const actualErrorsInSegment = value.length - correctCharsInSegment; // จำนวนที่พิมพ์ผิดใน segment นี้
 
       const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment;
       const newTotalTypedChars = totalTypedChars + textToType.length;
-      const newTotalErrors = totalErrors + errorsInSegment;
+      const newTotalErrors = totalErrors + actualErrorsInSegment; // ใช้ actualErrors แทน
 
       setTotalCorrectChars(newTotalCorrectChars);
+      totalCorrectCharsRef.current = newTotalCorrectChars; // Update ref
       setTotalTypedChars(newTotalTypedChars);
       setTotalErrors(newTotalErrors);
+      totalErrorsRef.current = newTotalErrors; // Update ref
+
+      // Debug log (สามารถเอาออกได้หลังจากแก้ไขเสร็จ)
+      console.log('=== Game completed ===');
+      console.log('value.length:', value.length);
+      console.log('correctCharsInSegment:', correctCharsInSegment);
+      console.log('actualErrorsInSegment (พิมพ์ผิด):', actualErrorsInSegment);
+      console.log('newTotalErrors:', newTotalErrors);
+      console.log('newTotalTypedChars (สะสม):', newTotalTypedChars); // เพิ่ม log นี้
+      console.log('=====================');
 
       setIsFinished(true);
       setIsStarted(false);
@@ -787,9 +847,9 @@ const App: React.FC = () => {
   };
 
   /**
- * @function formatTimeWithColor
- * @description แปลงเวลาเป็นรูปแบบ MM:SS พร้อมกำหนดสีตามเวลาที่เหลือ
- */
+   * @function formatTimeWithColor
+   * @description แปลงเวลาเป็นรูปแบบ MM:SS พร้อมกำหนดสีตามเวลาที่เหลือ
+   */
   const formatTimeWithColor = (seconds: number | null, isCountdown: boolean = false) => {
     if (seconds === null) return { time: '∞', color: 'text-blue-600' };
 
@@ -813,8 +873,6 @@ const App: React.FC = () => {
    * @description สร้าง JSX สำหรับแสดงข้อความที่ต้องพิมพ์ พร้อมไฮไลท์และสไตล์ต่างๆ
    * มีการจัดการวรรณยุกต์ลอยของภาษาไทย
    */
-  // ในฟังก์ชัน renderTextToType() แก้ไขจาก:
-
   const renderTextToType = () => {
     const isLastSegment = currentSegmentIndex === segments.length - 1;
     const isTypingComplete = typedText.length === textToType.length;
@@ -822,7 +880,7 @@ const App: React.FC = () => {
     const toneMarks = ['่', '้', '๊', '๋',];
     const topVowels = ['ิ', 'ี', 'ึ', 'ื', '์', 'ั'];
     const saraAm = 'ำ';
-    const tailConsonants = ['ป', 'ฝ', 'ฟ', 'ฬ']; // เพิ่มบรรทัดนี้
+    const tailConsonants = ['ป', 'ฝ', 'ฟ', 'ฬ'];
 
     const textElements = textToType.split('').map((char, index) => {
       // กำหนด class สีตามความถูกต้องของการพิมพ์
@@ -835,7 +893,7 @@ const App: React.FC = () => {
       const isToneMark = toneMarks.includes(char);
       let hasTopVowelBefore = false;
       let hasSaraAmAfter = false;
-      let hasTailConsonantBefore = false; // เพิ่มบรรทัดนี้
+      let hasTailConsonantBefore = false;
 
       if (isToneMark && index > 0) {
         if (topVowels.includes(textToType[index - 1])) hasTopVowelBefore = true;
@@ -1100,11 +1158,11 @@ const App: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
               <div>
                 <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>
-                  {/* แก้ไขการแสดงเวลา */}
-                  {isTimeUp ? formatTime(timeLimit || timer) : formatTime(timer)}
+                  {/* แสดงเวลาที่ใช้จริงเสมอ */}
+                  {formatTime(timer)}
                 </div>
                 <div className="text-sm text-gray-600">
-                  {isTimeUp ? 'เวลาที่กำหนด' : 'เวลาที่ใช้'}
+                  {isTimeUp ? 'เวลาที่ใช้จริง' : 'เวลาที่ใช้'}
                 </div>
               </div>
               <div>
