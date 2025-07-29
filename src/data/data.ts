@@ -2201,82 +2201,82 @@ export const languages: Language[] = [
       },
     ],
   },
-  // {
-  //     id: 'english',
-  //     name: 'English',
-  //     units: [
-  //         {
-  //             id: 'english-basic',
-  //             name: 'Unit 1: Basic',
-  //             sessions: [
-  //                 {
-  //                     id: 'english-basic-session-1',
-  //                     name: 'Session 1: Home Row',
-  //                     levels: [
-  //                         {
-  //                             id: 'english-basic-1-1',
-  //                             name: 'Level 1: Left Hand',
-  //                             text: 'a s d f',
-  //                         },
-  //                         {
-  //                             id: 'english-basic-1-2',
-  //                             name: 'Level 2: Right Hand',
-  //                             text: 'j k l ;',
-  //                         },
-  //                         {
-  //                             id: 'english-basic-1-3',
-  //                             name: 'Level 3: Both Hands',
-  //                             text: 'a s d f j k l ;',
-  //                         }
-  //                     ]
-  //                 },
-  //                 {
-  //                     id: 'english-basic-session-2',
-  //                     name: 'Session 2: Top Row',
-  //                     levels: [
-  //                         {
-  //                             id: 'english-basic-2-1',
-  //                             name: 'Level 1: Left Side',
-  //                             text: 'Q W E R T',
-  //                         },
-  //                         {
-  //                             id: 'english-basic-2-2',
-  //                             name: 'Level 2: Right Side',
-  //                             text: 'y u i o p',
-  //                         },
-  //                         {
-  //                             id: 'english-basic-2-3',
-  //                             name: 'Level 3: Complete Top Row',
-  //                             text: 'q w e r t y u i o p',
-  //                         }
-  //                     ]
-  //                 }
-  //             ]
-  //         },
-  //         {
-  //             id: 'english-words',
-  //             name: 'Unit 2: Words',
-  //             sessions: [
-  //                 {
-  //                     id: 'english-words-session-1',
-  //                     name: 'Session 1: Simple Words',
-  //                     levels: [
-  //                         {
-  //                             id: 'english-words-1-1',
-  //                             name: 'Level 1: Common Words',
-  //                             text: 'the and for are but not you all can had',
-  //                         },
-  //                         {
-  //                             id: 'english-words-1-2',
-  //                             name: 'Level 2: More Words',
-  //                             text: 'her was one our day get use man new now',
-  //                         }
-  //                     ]
-  //                 }
-  //             ]
-  //         }
-  //     ]
-  // }
+  {
+    id: "english",
+    name: "English",
+    units: [
+      {
+        id: "english-basic",
+        name: "Unit 1: Basic",
+        sessions: [
+          {
+            id: "english-basic-session-1",
+            name: "Session 1: Home Row",
+            levels: [
+              {
+                id: "english-basic-1-1",
+                name: "Level 1: Left Hand",
+                text: "a s d f",
+              },
+              {
+                id: "english-basic-1-2",
+                name: "Level 2: Right Hand",
+                text: "j k l ;",
+              },
+              {
+                id: "english-basic-1-3",
+                name: "Level 3: Both Hands",
+                text: "a s d f j k l ;",
+              },
+            ],
+          },
+          {
+            id: "english-basic-session-2",
+            name: "Session 2: Top Row",
+            levels: [
+              {
+                id: "english-basic-2-1",
+                name: "Level 1: Left Side",
+                text: "Q W E R T",
+              },
+              {
+                id: "english-basic-2-2",
+                name: "Level 2: Right Side",
+                text: "y u i o p",
+              },
+              {
+                id: "english-basic-2-3",
+                name: "Level 3: Complete Top Row",
+                text: "q w e r t y u i o p",
+              },
+            ],
+          },
+        ],
+      },
+      {
+        id: "english-words",
+        name: "Unit 2: Words",
+        sessions: [
+          {
+            id: "english-words-session-1",
+            name: "Session 1: Simple Words",
+            levels: [
+              {
+                id: "english-words-1-1",
+                name: "Level 1: Common Words",
+                text: "the and for are but not you all can had",
+              },
+              {
+                id: "english-words-1-2",
+                name: "Level 2: More Words",
+                text: "her was one our day get use man new now",
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  },
 ];
 
 // =============================================================================

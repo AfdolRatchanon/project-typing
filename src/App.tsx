@@ -1262,7 +1262,7 @@ const App: React.FC = () => {
                             return (
                                 <div key={language.id} className="border border-gray-200 rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
                                     <button
-                                        onClick={() => setCurrentLevelId(language.id === expandedLanguage ? '' : language.id)} // Changed to toggle language based on its own ID
+                                        onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)} // Changed to toggle language based on its own ID
                                         className={`w-full flex items-center justify-between p-2.5 sm:p-3 lg:p-4 transition-all duration-300 ${isLanguageActive ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500' : 'bg-gray-50 hover:bg-gray-100'}`}
                                     >
                                         <span className={`font-bold text-sm sm:text-base ${isLanguageActive ? 'text-blue-700' : 'text-gray-800'}`}>{language.name}</span>
