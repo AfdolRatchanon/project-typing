@@ -10,1188 +10,121 @@ declare global {
     }
 }
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert, Timer, LogIn, LogOut, User } from 'lucide-react';
-import './App.css';
-import { languages, scoringCriteria } from './data/data';
+import React, { useState, useEffect } from 'react'; // Import useEffect
+import { Target } from 'lucide-react';
+import './App.css'; // Assuming App.css contains global styles
 
-// Firebase imports
-import type { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { ref, set, get, onValue } from 'firebase/database'; // Removed 'update' as it's not used
-import { auth, realtimeDb } from './firebaseConfig'; // Removed 'app' as it's not directly used here
+// Import components
+import AuthSection from './components/AuthSection';
+import LevelSelector from './components/LevelSelector';
+import StatsDisplay from './components/StatsDisplay';
+import TypingArea from './components/TypingArea';
+import GameControls from './components/GameControls';
+import VirtualKeyboard from './components/VirtualKeyboard';
+import NextCharGuidance from './components/NextCharGuidance';
+import GameResults from './components/GameResults';
+import LevelScoringCriteria from './components/LevelScoringCriteria';
 
-// ===================================================================================
-// I. ข้อมูลและค่าคงที่ (Data & Constants)
-// ส่วนนี้จะเก็บฟังก์ชันเล็กๆ ที่ทำงานเฉพาะอย่างและสามารถนำกลับมาใช้ใหม่ได้
-// ===================================================================================
+// Import hooks
+import { useAuth } from './hooks/useAuth';
+import { useTypingGame } from './hooks/useTypingGame';
 
-/**
- * @constant keyboardRows
- * @description โครงสร้างแถวของคีย์บอร์ดแบบกายภาพ
- */
-const keyboardRows = [
-    ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
-    // แก้ไข: เปลี่ยน 'i' ตัวที่สองเป็น 'o' เพื่อให้ keyLabel ไม่ซ้ำกัน
-    ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
-    ['CapsLock', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", 'Enter'],
-    ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'ShiftRight'],
-    ['Control', 'Alt', 'Space', 'AltGr', 'ControlRight'],
-];
+// Import data
+import { languages } from './data/data';
 
-/**
- * @constant keyDisplays
- * @description ออบเจ็กต์สำหรับจับคู่ key label กับตัวอักษรที่จะแสดงผล
- * สำหรับภาษาไทยและอังกฤษ ทั้งในสถานะปกติ (unshifted) และกด Shift (shifted)
- */
-const keyDisplays = {
-    en: {
-        unshifted: {
-            '`': '`', '1': '1', '2': '2', '3': '3', '4': '4', '5': '5', '6': '6', '7': '7', '8': '8', '9': '9', '0': '0', '-': '-', '=': '=',
-            'q': 'q', 'w': 'w', 'e': 'e', 'r': 'r', 't': 't', 'y': 'y', 'u': 'u', 'i': 'i', 'o': 'o', 'p': 'p', '[': '[', ']': '}', '\\': '\\',
-            'a': 'a', 's': 's', 'd': 'd', 'f': 'f', 'g': 'g', 'h': 'h', 'j': 'j', 'k': 'k', 'l': 'l', ';': ';', "'": "'",
-            'z': 'z', 'x': 'x', 'c': 'c', 'v': 'v', 'b': 'b', 'n': 'n', 'm': 'm', ',': ',', '.': '.', '/': '/',
-            'Space': ' ',
-        },
-        shifted: {
-            '`': '~', '1': '!', '2': '@', '3': '#', '4': '$', '5': '%', '6': '^', '7': '&', '8': '*', '9': '(', '0': ')', '-': '_', '=': '+',
-            'q': 'Q', 'w': 'W', 'e': 'E', 'r': 'R', 't': 'T', 'y': 'Y', 'u': 'U', 'i': 'I', 'o': 'O', 'p': 'P', '[': '{', ']': '}', '\\': '|',
-            'a': 'A', 's': 'S', 'd': 'D', 'f': 'F', 'g': 'G', 'h': 'H', 'j': 'J', 'k': 'K', 'l': 'L', ';': ':', "'": '"',
-            'z': 'Z', 'x': 'X', 'c': 'C', 'v': 'V', 'b': 'B', 'n': 'N', 'm': 'M', ',': '<', '.': '>', '/': '?',
-            'Space': ' ',
-        }
-    },
-    th: {
-        unshifted: {
-            '`': '_', '1': 'ๅ', '2': '/', '3': '-', '4': 'ภ', '5': 'ถ', '6': 'ุ', '7': 'ึ', '8': 'ค', '9': 'ต', '0': 'จ', '-': 'ข', '=': 'ช',
-            'q': 'ๆ', 'w': 'ไ', 'e': 'ำ', 'r': 'พ', 't': 'ะ', 'y': 'ั', 'u': 'ี', 'i': 'ร', 'o': 'น', 'p': 'ย', '[': 'บ', ']': 'ล', '\\': 'ฃ',
-            'a': 'ฟ', 's': 'ห', 'd': 'ก', 'f': 'ด', 'g': 'เ', 'h': '้', 'j': '่', 'k': 'า', 'l': 'ส', ';': 'ว', "'": 'ง',
-            'z': 'ผ', 'x': 'ป', 'c': 'แ', 'v': 'อ', 'b': 'ิ', 'n': 'ื', 'm': 'ท', ',': 'ม', '.': 'ใ', '/': 'ฝ',
-            'Space': ' ',
-        },
-        shifted: {
-            '`': '+', '1': '%', '2': '๑', '3': '๒', '4': '๓', '5': '๔', '6': 'ู', '7': '฿', '8': '๕', '9': '๖', '0': '๗', '-': '๘', '=': '๙',
-            'q': '๐', 'w': '"', 'e': 'ฎ', 'r': 'ฑ', 't': 'ธ', 'y': 'ํ', 'u': '๊', 'i': 'ณ', 'o': 'ฯ', 'p': 'ญ', '[': 'ฐ', ']': ',', '\\': 'ฅ',
-            'a': 'ฤ', 's': 'ฆ', 'd': 'ฏ', 'f': 'โ', 'g': 'ฌ', 'h': '็', 'j': '๋', 'k': 'ษ', 'l': 'ศ', ';': 'ซ', "'": '.',
-            'z': '(', 'x': ')', 'c': 'ฉ', 'v': 'ฮ', 'b': 'ฺ', 'n': '์', 'm': '?', ',': 'ฒ', '.': 'ฬ', '/': 'ฦ',
-            'Space': ' ',
-        }
-    }
-};
-
-/**
- * @constant keyToFingerMap
- * @description ออบเจ็กต์สำหรับจับคู่ key label กับนิ้วที่ควรใช้ในการพิมพ์
- */
-const keyToFingerMap: { [key: string]: string } = {
-    '`': 'leftPinky', '1': 'leftPinky', 'q': 'leftPinky', 'a': 'leftPinky', 'z': 'leftPinky', 'Tab': 'leftPinky', 'CapsLock': 'leftPinky', 'Shift': 'leftPinky', 'Control': 'leftPinky',
-    '2': 'leftRing', 'w': 'leftRing', 's': 'leftRing', 'x': 'leftRing',
-    '3': 'leftMiddle', 'e': 'leftMiddle', 'd': 'leftMiddle', 'c': 'leftMiddle',
-    '4': 'leftIndex', 'r': 'leftIndex', 'f': 'leftIndex', 'v': 'leftIndex',
-    '5': 'leftIndex', 't': 'leftIndex', 'g': 'leftIndex', 'b': 'leftIndex',
-    '6': 'rightIndex', 'y': 'rightIndex', 'h': 'rightIndex', 'n': 'rightIndex',
-    '7': 'rightIndex', 'u': 'rightIndex', 'j': 'rightIndex', 'm': 'rightIndex',
-    '8': 'rightMiddle', 'i': 'rightMiddle', 'k': 'rightMiddle', ',': 'rightMiddle',
-    '9': 'rightRing', 'o': 'rightRing', 'l': 'rightRing', '.': 'rightRing',
-    '0': 'rightPinky', '-': 'rightPinky', '=': 'rightPinky', 'p': 'rightPinky', '[': 'rightPinky', ']': 'rightPinky', '\\': 'rightPinky', ';': 'rightPinky', "'": 'rightPinky', '/': 'rightPinky', 'Backspace': 'rightPinky', 'Enter': 'rightPinky', 'ShiftRight': 'rightPinky', 'ControlRight': 'rightPinky',
-    'Space': 'thumb',
-    'Alt': 'leftThumb',
-    'AltGr': 'rightThumb',
-};
-
-/**
- * @constant fingerNamesDisplay
- * @description ออบเจ็กต์สำหรับแสดงชื่อนิ้วเป็นภาษาไทย
- */
-const fingerNamesDisplay: { [key: string]: string } = {
-    leftPinky: 'นิ้วก้อยซ้าย',
-    leftRing: 'นิ้วนางซ้าย',
-    leftMiddle: 'นิ้วกลางซ้าย',
-    leftIndex: 'นิ้วชี้ซ้าย',
-    leftThumb: 'นิ้วโป้งซ้าย',
-    rightIndex: 'นิ้วชี้ขวา',
-    rightMiddle: 'นิ้วกลางขวา',
-    rightRing: 'นิ้วนางขวา',
-    rightPinky: 'นิ้วก้อยขวา',
-    rightThumb: 'นิ้วโป้งขวา',
-    thumb: 'นิ้วโป้ง (ซ้าย/ขวา)',
-};
-
-
-// ===================================================================================
-// II. ฟังก์ชันผู้ช่วย (Helper Functions)
-// ส่วนนี้จะเก็บฟังก์ชันเล็กๆ ที่ทำงานเฉพาะอย่างและสามารถนำกลับมาใช้ใหม่ได้
-// =================================0=================================================
-
-/**
- * @function getCharToKeyLabelMap
- * @description สร้าง Map แบบย้อนกลับ เพื่อค้นหา key label จากตัวอักษร (ใช้สำหรับไฮไลท์ปุ่ม)
- * @param {'en' | 'th'} lang - ภาษาที่ต้องการ
- * @param {boolean} shifted - สถานะการกด Shift
- * @returns {{ [char: string]: string }} - ออบเจ็กต์ที่ map ตัวอักษรไปยัง key label
- */
-const getCharToKeyLabelMap = (lang: 'en' | 'th', shifted: boolean): { [char: string]: string } => {
-    const map: { [char: string]: string } = {};
-    const currentLayout = keyDisplays[lang][shifted ? 'shifted' : 'unshifted'];
-    for (const keyLabel in currentLayout) {
-        const char = currentLayout[keyLabel as keyof typeof currentLayout];
-        map[char] = keyLabel;
-    }
-    return map;
-};
-
-/**
- * @function getRecommendedShiftKey
- * @description กำหนดว่าควรใช้ปุ่ม Shift ซ้ายหรือขวา โดยอิงจากตำแหน่งของปุ่มหลัก
- * @param {string} baseKey - Key label ของปุ่มที่ต้องการกด
- * @returns {'Shift' | 'ShiftRight'} - Key label ของปุ่ม Shift ที่แนะนำ
- */
-const getRecommendedShiftKey = (baseKey: string): 'Shift' | 'ShiftRight' => {
-    const leftSideKeys = ['`', '1', '2', '3', '4', '5', 'Tab', 'q', 'w', 'e', 'r', 't', 'CapsLock', 'a', 's', 'd', 'f', 'g', 'Shift', 'z', 'x', 'c', 'v', 'b'];
-    const rightSideKeys = ['6', '7', '8', '9', '0', '-', '=', 'Backspace', 'y', 'u', 'i', 'o', 'p', '[', '{', ']', '}', '\\', '|', 'h', 'j', 'k', 'l', ';', "'", 'Enter', 'n', 'm', ',', '.', '/', 'ShiftRight'];
-
-    if (leftSideKeys.includes(baseKey)) {
-        return 'ShiftRight'; // ปุ่มฝั่งซ้ายใช้นิ้วก้อยขวากด Shift
-    } else if (rightSideKeys.includes(baseKey)) {
-        return 'Shift'; // ปุ่มฝั่งขวาใช้นิ้วก้อยซ้ายกด Shift
-    } else {
-        return 'Shift'; // ค่าเริ่มต้น
-    }
-};
-
-/**
- * @function segmentText
- * @description แบ่งข้อความยาวๆ ออกเป็นส่วนๆ (segments) เพื่อให้แสดงผลบนจอได้พอดี
- * @param {string} text - ข้อความต้นฉบับ
- * @param {number} maxCharsPerLine - จำนวนตัวอักษรสูงสุดต่อบรรทัด
- * @returns {string[]} - อาร์เรย์ของข้อความที่ถูกแบ่งแล้ว
- */
-const segmentText = (text: string, maxCharsPerLine: number = 70): string[] => {
-    const normalizedText = text.replace(/\s+/g, ' ').trim();
-    const words = normalizedText.split(' ');
-    const lines: string[] = [];
-    let currentLine = '';
-
-    for (let i = 0; i < words.length; i++) {
-        const word = words[i];
-        const potentialNewLine = currentLine ? (currentLine + ' ' + word) : word;
-        if (potentialNewLine.length <= maxCharsPerLine) {
-            currentLine = potentialNewLine;
-        } else {
-            if (currentLine) {
-                lines.push(currentLine);
-            }
-            currentLine = word;
-        }
-    }
-    if (currentLine) {
-        lines.push(currentLine);
-    }
-    return lines;
-};
-
-// ===================================================================================
-// III. คอมโพเนนต์หลัก (Main Component)
-// ===================================================================================
 const App: React.FC = () => {
-    // กำหนด appId อย่างปลอดภัย โดยเข้าถึงจาก window object
+    // Get appId safely from window object
     const appId = window.__app_id || 'default-app-id';
-    // เข้าถึง __initial_auth_token อย่างปลอดภัย
-    const initialAuthToken = window.__initial_auth_token;
 
-    // ---------------------------------------------------------------------------------
-    // A. State Management (การจัดการสถานะ)
-    // ---------------------------------------------------------------------------------
-
-    // State สำหรับการเลือกด่านและเนื้อหา
+    // State for current level selection (managed here as it affects both auth and game logic)
     const [currentLevelId, setCurrentLevelId] = useState<string>(languages[0].units[0].sessions[0].levels[0].id);
-    const [fullTextContent, setFullTextContent] = useState<string>(languages[0].units[0].sessions[0].levels[0].text);
 
-    // State สำหรับการแสดงผลข้อความ
-    const [segments, setSegments] = useState<string[]>([]);
-    const [currentSegmentIndex, setCurrentSegmentIndex] = useState<number>(0);
-    const [textToType, setTextToType] = useState<string>('');
-    const [typedText, setTypedText] = useState<string>('');
-
-    // State สำหรับสถานะของเกม (เริ่ม, หยุด, จบ)
-    const [isStarted, setIsStarted] = useState<boolean>(false);
-    const [isPaused, useStateIsPaused] = useState<boolean>(false); // เปลี่ยนชื่อเพื่อใช้เป็น state ภายใน
-    const [isFinished, setIsFinished] = useState<boolean>(false);
-
-    // State สำหรับการจับเวลาและคะแนน
-    const [startTime, setStartTime] = useState<number | null>(null);
-    const [timer, setTimer] = useState<number>(0);
-    const [totalErrors, setTotalErrors] = useState<number>(0);
-    const [totalCorrectChars, setTotalCorrectChars] = useState<number>(0);
-    const [totalTypedChars, setTotalTypedChars] = useState<number>(0);
-    const [wpm, setWpm] = useState<number>(0);
-    const [accuracy, setAccuracy] = useState<number>(0);
-    const [timeLimit, setTimeLimit] = useState<number | null>(null); // เวลาจำกัด (วินาที) หรือ null = ไม่จำกัด
-    const [remainingTime, setRemainingTime] = useState<number | null>(null); // เวลาที่เหลือ
-    const [isTimeUp, setIsTimeUp] = useState<boolean>(false); // สถานะหมดเวลา
-
-    // State สำหรับคีย์บอร์ดและการแนะนำนิ้ว
-    const [nextChar, setNextChar] = useState<string>('');
-    const [activeFinger, setActiveFinger] = useState<string | null>(null);
-    const [highlightedKeys, setHighlightedKeys] = useState<string[]>([]);
-    const [keyboardLanguage, setKeyboardLanguage] = useState<'en' | 'th'>('en');
-    const [isShiftActive, setIsShiftActive] = useState<boolean>(false);
-    const [isCapsLockActive, setIsCapsLockActive] = useState<boolean>(false);
-
-    // State สำหรับเมนูเลือกด่าน (collapsible menu)
-    const [expandedLanguage, setExpandedLanguage] = useState<string>('thai');
-    const [expandedUnits, setExpandedUnits] = useState<{ [key: string]: boolean }>({ 'thai-basic': true });
-    const [expandedSessions, setExpandedSessions] = useState<{ [key: string]: boolean }>({ 'thai-basic-session-1': true });
-
-    // Firebase Auth States
-    const [user, setUser] = useState<FirebaseUser | null>(null);
-    const [isAuthReady, setIsAuthReady] = useState<boolean>(false); // To track Firebase auth initialization
-
-    // State for user avatar URL (to handle fallback)
-    const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
-
-    // State for user role
-    const [userRole, setUserRole] = useState<string | null>(null);
-
-    // State for user's latest stats for the current level
-    const [latestUserStats, setLatestUserStats] = useState<{
-        wpm: number;
-        accuracy: number;
-        totalErrors: number;
-        grade: string;
-        score10Point: number;
-        lastPlayed: number;
-        playCount: number;
-    } | null>(null);
-
-
-    // ---------------------------------------------------------------------------------
-    // B. Refs (การอ้างอิงถึง DOM Elements และค่าอื่นๆ)
-    // ---------------------------------------------------------------------------------
-    const intervalRef = useRef<number | null>(null); // เก็บ ID ของ interval ที่ใช้จับเวลา
-    const inputRef = useRef<HTMLTextAreaElement>(null); // อ้างอิงถึง <textarea> เพื่อ focus
-
-    // Refs สำหรับค่าที่เปลี่ยนแปลงบ่อย เพื่อให้ useCallback ไม่ต้อง re-create บ่อยๆ
-    // (ยังคงใช้ refs เพื่อให้ setInterval เข้าถึงค่าล่าสุดได้โดยไม่ re-create)
-    const typedTextRef = useRef(typedText);
-    const totalErrorsRef = useRef(totalErrors);
-    const totalCorrectCharsRef = useRef(totalCorrectChars);
-    const timerRef = useRef(timer);
-    const currentSegmentIndexRef = useRef(currentSegmentIndex);
-    const segmentsRef = useRef(segments);
-    const textToTypeRef = useRef(textToType);
-    const isPausedRef = useRef(isPaused); // เพิ่ม ref สำหรับ isPaused
-
-    // Effect เพื่ออัปเดต Ref เมื่อ State เปลี่ยน
-    useEffect(() => { typedTextRef.current = typedText; }, [typedText]);
-    useEffect(() => { totalErrorsRef.current = totalErrors; }, [totalErrors]);
-    useEffect(() => { totalCorrectCharsRef.current = totalCorrectChars; }, [totalCorrectChars]);
-    useEffect(() => { timerRef.current = timer; }, [timer]);
-    useEffect(() => { currentSegmentIndexRef.current = currentSegmentIndex; }, [currentSegmentIndex]);
-    useEffect(() => { segmentsRef.current = segments; }, [segments]);
-    useEffect(() => { textToTypeRef.current = textToType; }, [textToType]);
-    useEffect(() => { isPausedRef.current = isPaused; }, [isPaused]); // อัปเดต ref สำหรับ isPaused
-
-
-    // ---------------------------------------------------------------------------------
-    // C. Memoization & Callbacks (การเพิ่มประสิทธิภาพ)
-    // ---------------------------------------------------------------------------------
-
-    /**
-     * @memo typingGuidance
-     * @description คำนวณข้อมูลที่จำเป็นสำหรับการแนะนำการพิมพ์ทั้งหมดในครั้งเดียว
-     * เช่น ตัวอักษรถัดไป, ปุ่มที่ต้องไฮไลท์, นิ้วที่ต้องใช้, และภาษาของคีย์บอร์ด
-     * ใช้ useMemo เพื่อป้องกันการคำนวณซ้ำซ้อนเมื่อค่าที่ไม่เกี่ยวข้องเปลี่ยนแปลง
-     */
-    const typingGuidance = useMemo(() => {
-        // ฟังก์ชันภายในสำหรับตรวจจับภาษาหลักของข้อความ
-        const detectTextLanguage = (text: string): 'en' | 'th' => {
-            let thaiCount = 0;
-            let englishCount = 0;
-            for (let i = 0; i < text.length; i++) {
-                const charCode = text.charCodeAt(i);
-                if (charCode >= 0x0E00 && charCode <= 0x0E7F) thaiCount++;
-                else if ((charCode >= 65 && charCode <= 90) || (charCode >= 97 && charCode <= 122)) englishCount++;
-            }
-            return thaiCount >= englishCount ? 'th' : 'en';
-        };
-
-        const mainLanguage = detectTextLanguage(textToType);
-        const char = textToType[typedText.length];
-
-        // กรณีพิเศษ: พิมพ์ครบ segment แล้ว และต้องกด Space เพื่อไปต่อ
-        if (typedText.length === textToType.length && currentSegmentIndex + 1 < segments.length) {
-            return { char: ' ', keysToHighlight: ['Space'], baseKey: 'Space', language: mainLanguage };
-        }
-
-        if (!char) {
-            return { char: '', keysToHighlight: [], baseKey: null, language: mainLanguage };
-        }
-
-        // ตรวจจับภาษาของตัวอักษรปัจจุบัน (ยกเว้น space)
-        let detectedLanguage: 'en' | 'th' = mainLanguage;
-        if (char !== ' ') {
-            const charCode = char.charCodeAt(0);
-            detectedLanguage = (charCode >= 0x0E00 && charCode <= 0x0E7F) ? 'th' : 'en';
-        }
-
-        // ค้นหาปุ่มที่ต้องกด (baseKey) และตรวจสอบว่าต้องใช้ Shift หรือไม่
-        let baseKey: string | undefined;
-        let needsShift = false;
-        const unshiftedMap = getCharToKeyLabelMap(detectedLanguage, false);
-        baseKey = unshiftedMap[char];
-
-        if (!baseKey) {
-            const shiftedMap = getCharToKeyLabelMap(detectedLanguage, true);
-            baseKey = shiftedMap[char];
-            if (baseKey) needsShift = true;
-        }
-
-        // กำหนดปุ่มที่จะไฮไลท์
-        const keysToHighlight: string[] = [];
-        if (baseKey) {
-            keysToHighlight.push(baseKey);
-            const isCharUpperCase = detectedLanguage === 'en' && char.match(/[A-Z]/);
-            if (needsShift || (isCharUpperCase && !isCapsLockActive) || (!isCharUpperCase && isCapsLockActive && char.match(/[a-z]/i))) {
-                keysToHighlight.push(getRecommendedShiftKey(baseKey));
-            }
-        }
-
-        return {
-            char: char,
-            keysToHighlight: keysToHighlight,
-            baseKey: baseKey || null,
-            language: detectedLanguage,
-        };
-    }, [textToType, typedText, isCapsLockActive, currentSegmentIndex, segments]);
-
-    /**
-     * @callback calculateWPM
-     * @description คำนวณความเร็วในการพิมพ์ (Words Per Minute)
-     * สำหรับภาษาไทยใช้ NWAM (Net Words a Minute) = (จำนวนดีดทั้งหมด/4 - จำนวนคำผิด*10) / เวลา(นาที)
-     * สำหรับภาษาอังกฤษใช้วิธีเดิม = ตัวอักษรถูกต้อง/5 / เวลา(นาที)
-     */
-    const calculateWPM = useCallback((correctChars: number, totalTypedCharsCount: number, actualErrors: number, timeInSeconds: number, language: 'th' | 'en' = 'th'): number => {
-        if (timeInSeconds === 0) return 0;
-        const minutes = timeInSeconds / 60;
-
-        if (language === 'th') {
-            // NWAM สำหรับภาษาไทย - ใช้จำนวนที่พิมพ์ได้จริงเป็นฐาน
-            const totalWords = totalTypedCharsCount / 4; // จำนวนดีดที่พิมพ์ได้จริงหารด้วย 4
-            const errorPenalty = actualErrors * 10; // จำนวนข้อผิดจริง (พิมพ์ผิด) คูณ 10
-            const netWords = Math.max(0, totalWords - errorPenalty); // ป้องกันค่าติดลบ
-            return Math.round(netWords / minutes);
-        } else {
-            // วิธีเดิมสำหรับภาษาอังกฤษ
-            const words = correctChars / 5;
-            return Math.round(words / minutes);
-        }
-    }, []);
-
-    /**
-     * @callback calculateAccuracy
-     * @description คำนวณความแม่นยำในการพิมพ์
-     */
-    const calculateAccuracy = useCallback((correctChars: number, totalChars: number): number => {
-        if (totalChars === 0) return 0;
-        return Math.round((correctChars / totalChars) * 100);
-    }, []);
-
-    /**
-     * @function getDefaultCriteria
-     * @description สร้างเกณฑ์การให้คะแนนพื้นฐานตามประเภทของด่าน
-     */
-    const getDefaultCriteria = useCallback(() => {
-        // ตรวจสอบว่าด่านปัจจุบันมีเวลาจำกัดหรือไม่
-        let currentLevelTimeLimit = null;
-        for (const language of languages) {
-            for (const unit of language.units) {
-                for (const session of unit.sessions) {
-                    const selectedLevel = session.levels.find(level => level.id === currentLevelId);
-                    if (selectedLevel) {
-                        currentLevelTimeLimit = selectedLevel.timeLimit;
-                        break;
-                    }
-                }
-            }
-        }
-
-        // ถ้าไม่มีเวลาจำกัด ใช้เกณฑ์ตามจำนวนข้อผิดพลาด
-        if (!currentLevelTimeLimit) {
-            return [
-                { minWPM: 0, maxErrors: 0, score10Point: 10 },
-                { minWPM: 0, maxErrors: 1, score10Point: 9 },
-                { minWPM: 0, maxErrors: 2, score10Point: 8 },
-                { minWPM: 0, maxErrors: 3, score10Point: 7 },
-                { minWPM: 0, maxErrors: 4, score10Point: 6 },
-                { minWPM: 0, maxErrors: 5, score10Point: 5 },
-                { minWPM: 0, maxErrors: 6, score10Point: 4 },
-                { minWPM: 0, maxErrors: 7, score10Point: 3 },
-                { minWPM: 0, maxErrors: 8, score10Point: 2 },
-                { minWPM: 0, maxErrors: 9, score10Point: 1 },
-                { minWPM: 0, maxErrors: 10, score10Point: 0 },
-            ];
-        }
-
-        // ถ้ามีเวลาจำกัด ใช้เกณฑ์ตาม WPM
-        return [
-            { minWPM: 20, maxErrors: 0, score10Point: 10 },
-            { minWPM: 18, maxErrors: 0, score10Point: 9 },
-            { minWPM: 16, maxErrors: 0, score10Point: 8 },
-            { minWPM: 14, maxErrors: 0, score10Point: 7 },
-            { minWPM: 12, maxErrors: 0, score10Point: 6 },
-            { minWPM: 10, maxErrors: 0, score10Point: 5 },
-            { minWPM: 8, maxErrors: 0, score10Point: 4 },
-            { minWPM: 6, maxErrors: 0, score10Point: 3 },
-            { minWPM: 4, maxErrors: 0, score10Point: 2 },
-            { minWPM: 2, maxErrors: 0, score10Point: 1 },
-            { minWPM: 0, maxErrors: 0, score10Point: 0 },
-        ];
-    }, [currentLevelId, languages]);
-
-    /**
-     * @callback getGrade
-     * @description คำนวณเกรดที่ได้ตามเกณฑ์ของด่านปัจจุบัน (รองรับ optional fields และเกณฑ์พื้นฐาน)
-     * @param {number} currentWPM - WPM ที่คำนวณได้
-     * @param {number} currentAccuracy - ความแม่นยำที่คำนวณได้
-     * @param {number} currentTotalErrors - จำนวนข้อผิดพลาดที่คำนวณได้
-     */
-    const getGrade = useCallback((currentWPM: number, currentAccuracy: number, currentTotalErrors: number): string => {
-        // ไม่ต้องตรวจสอบ isFinished ที่นี่ เพราะค่าถูกส่งมาโดยตรงแล้ว
-        const currentLevelCriteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
-
-        for (const criteria of currentLevelCriteria) {
-            const wpmPassed = currentWPM >= criteria.minWPM;
-            const errorsPassed = currentTotalErrors <= criteria.maxErrors;
-            const accuracyPassed = criteria.minAccuracy === undefined || currentAccuracy >= criteria.minAccuracy;
-
-            if (wpmPassed && errorsPassed && accuracyPassed) {
-                return criteria.grade || `${criteria.score10Point} คะแนน`;
-            }
-        }
-        return 'ต้องฝึกเพิ่ม';
-    }, [currentLevelId, getDefaultCriteria]);
-
-
-    /**
-     * @callback getScore10Point
-     * @description คำนวณคะแนน 10 คะแนนตาม WPM ที่ได้ (รองรับ optional fields และเกณฑ์พื้นฐาน)
-     * @param {number} currentWPM - WPM ที่คำนวณได้
-     * @param {number} currentAccuracy - ความแม่นยำที่คำนวณได้
-     * @param {number} currentTotalErrors - จำนวนข้อผิดพลาดที่คำนวณได้
-     */
-    const getScore10Point = useCallback((currentWPM: number, currentAccuracy: number, currentTotalErrors: number): number => {
-        // ไม่ต้องตรวจสอบ isFinished ที่นี่ เพราะค่าถูกส่งมาโดยตรงแล้ว
-        const currentLevelCriteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
-
-        // หาเกณฑ์ที่ตรงกับผลการพิมพ์
-        for (const criteria of currentLevelCriteria) {
-            const wpmPassed = currentWPM >= criteria.minWPM;
-            const errorsPassed = currentTotalErrors <= criteria.maxErrors;
-            const accuracyPassed = criteria.minAccuracy === undefined || currentAccuracy >= criteria.minAccuracy;
-
-            if (wpmPassed && errorsPassed && accuracyPassed) {
-                return criteria.score10Point;
-            }
-        }
-        return 0; // ถ้าไม่เข้าเกณฑ์ใดเลย
-    }, [currentLevelId, getDefaultCriteria]);
-
-    /**
-     * @function saveUserStats
-     * @description บันทึกสถิติการเล่นของผู้ใช้ลง Realtime Database
-     */
-    const saveUserStats = useCallback(async (
-        finalWPM: number,
-        finalAccuracy: number,
-        finalTotalErrors: number,
-        finalGrade: string,
-        finalScore10Point: number
-    ) => {
-        if (user && realtimeDb) { // เปลี่ยน db เป็น realtimeDb
-            const userStatsPath = `artifacts/${appId}/users/${user.uid}/stats/${currentLevelId}`; // ใช้ appId
-            const userStatsRef = ref(realtimeDb, userStatsPath); // ใช้ realtimeDb
-
-            try {
-                const snapshot = await get(userStatsRef);
-                let currentPlayCount = 0;
-                if (snapshot.exists()) {
-                    currentPlayCount = snapshot.val().playCount || 0;
-                }
-
-                await set(userStatsRef, {
-                    wpm: finalWPM,
-                    accuracy: finalAccuracy,
-                    totalErrors: finalTotalErrors,
-                    grade: finalGrade,
-                    score10Point: finalScore10Point,
-                    lastPlayed: Date.now(),
-                    playCount: currentPlayCount + 1,
-                });
-                console.log("User stats saved successfully!");
-            }
-            // Catch block for error handling
-            catch (error) {
-                console.error("Error saving user stats:", error);
-            }
-        }
-    }, [user, realtimeDb, currentLevelId, appId]); // เพิ่ม appId ใน dependencies
-
-
-    /**
-     * @callback handleTimeUp
-     * @description จัดการเมื่อเวลาหมดลง
-     * @param {string} currentTypedText - ค่า typedText ล่าสุด
-     * @param {number} currentTotalErrors - ค่า totalErrors ล่าสุด
-     * @param {number} currentTotalCorrectChars - ค่า totalCorrectChars ล่าสุด
-     * @param {number} currentSegmentIdx - ค่า currentSegmentIndex ล่าสุด
-     * @param {string[]} allSegments - ค่า segments ล่าสุด
-     * @param {string} currentTextToType - ค่า textToType ล่าsุด
-     * @param {number | null} startTs - ค่า startTime ล่าสุด
-     * @param {number} currentTimerValue - ค่า timer ล่าสุด
-     */
-    const handleTimeUp = useCallback((
-        currentTypedText: string,
-        currentTotalErrors: number,
-        currentTotalCorrectChars: number,
-        currentSegmentIdx: number,
-        allSegments: string[],
-        currentTextToType: string,
-        startTs: number | null,
-        currentTimerValue: number
-    ) => {
-        // ป้องกันการเรียกซ้ำ
-        if (isTimeUp || isFinished) return;
-
-        setIsTimeUp(true);
-        setIsStarted(false);
-        setIsFinished(true);
-
-        // คำนวณความคืบหน้าปัจจุบันจากค่าที่ส่งมา
-        let completedCharsFromPreviousSegments = 0;
-        for (let i = 0; i < currentSegmentIdx; i++) {
-            completedCharsFromPreviousSegments += allSegments[i].length + 1;
-        }
-        const currentTotalProgress = completedCharsFromPreviousSegments + currentTypedText.length;
-
-        // คำนวณข้อผิดในส่วนปัจจุบันจากค่าที่ส่งมา
-        const currentCorrectChars = currentTypedText.split('')
-            .filter((char, index) => char === currentTextToType[index]).length;
-        const currentActualErrors = currentTypedText.length - currentCorrectChars;
-
-        // รวมคะแนนทั้งหมดจากค่าที่ส่งมา
-        const finalTotalCorrect = currentTotalCorrectChars + currentCorrectChars;
-        const finalActualErrors = currentTotalErrors + currentActualErrors;
-
-        // ใช้เวลาที่แท้จริงที่ผ่านไปจากค่าที่ส่งมา
-        const actualTimeUsed = startTs ? (Date.now() - startTs) / 1000 : timeLimit || currentTimerValue;
-
-        // คำนวณ WPM โดยส่ง currentTotalProgress โดยตรง
-        const finalWPM = calculateWPM(finalTotalCorrect, currentTotalProgress, finalActualErrors, actualTimeUsed, 'th');
-        const finalAccuracy = calculateAccuracy(finalTotalCorrect, currentTotalProgress);
-
-        // อัปเดตค่าสถิติ
-        setTotalCorrectChars(finalTotalCorrect);
-        setTotalTypedChars(currentTotalProgress); // แก้ไขตรงนี้: ใช้ currentTotalProgress แทน finalTotalProgress
-        setTotalErrors(finalActualErrors);
-        setWpm(finalWPM);
-        setAccuracy(finalAccuracy);
-
-        // เรียก saveUserStats ด้วยค่าที่คำนวณได้ล่าสุด
-        saveUserStats(
-            finalWPM,
-            finalAccuracy,
-            finalActualErrors,
-            getGrade(finalWPM, finalAccuracy, finalActualErrors), // ส่งค่า WPM, Accuracy, Errors ไปให้ getGrade
-            getScore10Point(finalWPM, finalAccuracy, finalActualErrors) // ส่งค่า WPM, Accuracy, Errors ไปให้ getScore10Point
-        );
-
-    }, [calculateWPM, calculateAccuracy, timeLimit, isTimeUp, isFinished, setIsTimeUp, setIsStarted, setIsFinished, setTotalCorrectChars, setTotalTypedChars, setTotalErrors, setWpm, setAccuracy, saveUserStats, getGrade, getScore10Point]);
-
-
-    // ---------------------------------------------------------------------------------
-    // E. Event Handlers & Game Logic (ฟังก์ชันจัดการเหตุการณ์และตรรกะของเกม)
-    // ---------------------------------------------------------------------------------
-
-    /**
-     * @function resetGameStates
-     * @description รีเซ็ตสถานะทั้งหมดของเกมกลับไปเป็นค่าเริ่มต้น
-     */
-    const resetGameStates = useCallback(() => {
-        // ล้าง interval ก่อน
-        if (intervalRef.current) {
-            clearInterval(intervalRef.current);
-            intervalRef.current = null;
-        }
-
-        // รีเซ็ต state และ ref
-        setTypedText('');
-        typedTextRef.current = '';
-        setStartTime(null);
-        setTimer(0);
-        timerRef.current = 0;
-        setTotalErrors(0);
-        totalErrorsRef.current = 0;
-        setTotalCorrectChars(0);
-        totalCorrectCharsRef.current = 0;
-        setTotalTypedChars(0);
-        setIsStarted(false);
-        useStateIsPaused(false); // ใช้ setter ของ isPaused
-        isPausedRef.current = false; // อัปเดต ref ด้วย
-        setIsFinished(false);
-        setIsTimeUp(false);
-        setWpm(0);
-        setAccuracy(0);
-        setRemainingTime(timeLimit); // รีเซ็ตเวลาที่เหลือ
-
-        setCurrentSegmentIndex(0);
-        currentSegmentIndexRef.current = 0;
-        // Removed inputRef.current.focus() from here, handled by new useEffect
-    }, [timeLimit]);
-
-    // ---------------------------------------------------------------------------------
-    // D. Effects (การจัดการ Side Effects)
-    // ---------------------------------------------------------------------------------
-
-    // Effect: Initialize Firebase and set up auth listener
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-            setUserPhotoUrl(currentUser?.photoURL || null);
-            setIsAuthReady(true);
-
-            if (currentUser) {
-                // Save user data to Realtime Database if not exists
-                const userRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/profile`); // ใช้ appId
-                const snapshot = await get(userRef);
-
-                if (!snapshot.exists()) {
-                    // New user or user data not yet saved
-                    await set(userRef, {
-                        uid: currentUser.uid,
-                        displayName: currentUser.displayName,
-                        email: currentUser.email,
-                        photoURL: currentUser.photoURL,
-                        role: 'user', // Default role
-                        createdAt: Date.now(),
-                    });
-                    setUserRole('user');
-                } else {
-                    // User exists, retrieve their role
-                    setUserRole(snapshot.val().role || 'user');
-                }
-
-                // Listen for user stats for the current level
-                const userStatsRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/stats/${currentLevelId}`); // ใช้ appId
-                const unsubscribeStats = onValue(userStatsRef, (snapshot) => {
-                    if (snapshot.exists()) {
-                        setLatestUserStats(snapshot.val());
-                    } else {
-                        setLatestUserStats(null);
-                    }
-                });
-                return () => {
-                    unsubscribeStats(); // Clean up stats listener on unmount or user change
-                    unsubscribe(); // Clean up auth listener
-                };
-
-            } else {
-                setUserRole(null);
-                setLatestUserStats(null);
-                // Sign in anonymously if no user and no initial token
-                if (typeof initialAuthToken === 'undefined' || initialAuthToken === null) { // ใช้ initialAuthToken
-                    if (auth) {
-                        // await signInAnonymously(auth); // Commented out to prevent automatic anonymous sign-in if not explicitly desired
-                    }
-                } else { // ถ้ามี initialAuthToken
-                    try {
-                        if (auth) {
-                            // await auth.signInWithCustomToken(initialAuthToken); // Commented out as this is typically handled by Canvas environment
-                        }
-                    } catch (error) {
-                        console.error("Error signing in with custom token:", error);
-                        if (auth) {
-                            // await signInAnonymously(auth); // Commented out
-                        }
-                    }
-                }
-            }
-        });
-
-        return () => unsubscribe();
-    }, [auth, realtimeDb, currentLevelId, appId, initialAuthToken]); // เพิ่ม initialAuthToken ใน dependencies
-
-    // Effect: เมื่อ `currentLevelId` เปลี่ยน ให้โหลดข้อความของด่านใหม่
-    useEffect(() => {
-        for (const language of languages) {
-            for (const unit of language.units) {
-                for (const session of unit.sessions) {
-                    const selectedLevel = session.levels.find(level => level.id === currentLevelId);
-                    if (selectedLevel) {
-                        setFullTextContent(selectedLevel.text);
-                        return;
-                    }
-                }
-            }
-        }
-    }, [currentLevelId]);
-
-    // Effect: เมื่อ `fullTextContent` เปลี่ยน ให้แบ่งข้อความเป็น segments และรีเซ็ตเกม
-    useEffect(() => {
-        if (fullTextContent) {
-            const newSegments = segmentText(fullTextContent);
-            setSegments(newSegments);
-            setCurrentSegmentIndex(0);
-            setTextToType(newSegments[0] || '');
-            resetGameStates(); // รีเซ็ตสถานะทั้งหมดของเกม
-
-            // Ensure focus after DOM update when a new level is loaded
-            if (inputRef.current) {
-                // A small timeout ensures the DOM has re-rendered and the textarea is enabled
-                setTimeout(() => {
-                    inputRef.current?.focus();
-                }, 50); // Small delay, adjust if needed
-            }
-        }
-    }, [fullTextContent, resetGameStates]); // Add resetGameStates to dependencies
-
-    // Effect: อัปเดต state จาก `typingGuidance` ที่คำนวณไว้
-    useEffect(() => {
-        setNextChar(typingGuidance.char);
-        setHighlightedKeys(typingGuidance.keysToHighlight);
-        setActiveFinger(typingGuidance.baseKey ? keyToFingerMap[typingGuidance.baseKey] : null);
-        setKeyboardLanguage(typingGuidance.language);
-    }, [typingGuidance]);
-
-    // Effect: เพิ่ม event listeners เพื่อตรวจจับการกด Shift และ CapsLock จากคีย์บอร์ดจริง
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Shift') setIsShiftActive(true);
-            else if (e.key === 'CapsLock') setIsCapsLockActive(e.getModifierState('CapsLock'));
-        };
-        const handleKeyUp = (e: KeyboardEvent) => {
-            if (e.key === 'Shift') setIsShiftActive(false);
-            else if (e.key === 'CapsLock') setIsCapsLockActive(e.getModifierState('CapsLock'));
-        };
-        window.addEventListener('keydown', handleKeyDown);
-        window.addEventListener('keyup', handleKeyUp);
-        return () => {
-            window.removeEventListener('keydown', handleKeyUp);
-            window.removeEventListener('keyup', handleKeyUp);
-        };
-    }, []);
-
-    // Effect: ขยายเมนูโดยอัตโนมัติเพื่อแสดงด่านที่กำลังเล่นอยู่
-    useEffect(() => {
-        for (const language of languages) {
-            for (const unit of language.units) {
-                for (const session of unit.sessions) {
-                    if (session.levels.some(level => level.id === currentLevelId)) {
-                        setExpandedLanguage(language.id);
-                        setExpandedUnits(prev => ({ ...prev, [unit.id]: true }));
-                        setExpandedSessions(prev => ({ ...prev, [session.id]: true }));
-                        return;
-                    }
-                }
-            }
-        }
-    }, [currentLevelId]);
-    // Effect: โหลดเวลาจำกัดเมื่อเปลี่ยนด่าน
-    useEffect(() => {
-        for (const language of languages) {
-            for (const unit of language.units) {
-                for (const session of unit.sessions) {
-                    const selectedLevel = session.levels.find(level => level.id === currentLevelId);
-                    if (selectedLevel) {
-                        const limit = selectedLevel.timeLimit || null;
-                        setTimeLimit(limit);
-                        setRemainingTime(limit);
-                        setIsTimeUp(false);
-                        return;
-                    }
-                }
-            }
-        }
-    }, [currentLevelId]);
-
-    // Effect: จับเวลาถอยหลังสำหรับเวลาจำกัด
-    useEffect(() => {
-        if (isStarted && !isPaused && !isFinished && !isTimeUp) {
-            intervalRef.current = window.setInterval(() => {
-                // อัปเดตเวลาที่ใช้
-                setTimer(prevTimer => {
-                    timerRef.current = prevTimer + 1; // อัปเดต ref ด้วย
-                    return prevTimer + 1;
-                });
-
-                // จัดการเวลาถอยหลัง (ถ้ามี)
-                if (timeLimit !== null) {
-                    setRemainingTime(prevTime => {
-                        if (prevTime !== null && prevTime <= 1) {
-                            // หมดเวลา - ส่งค่า state ล่าสุดจาก ref ไปยัง handleTimeUp
-                            handleTimeUp(
-                                typedTextRef.current,
-                                totalErrorsRef.current,
-                                totalCorrectCharsRef.current,
-                                currentSegmentIndexRef.current,
-                                segmentsRef.current,
-                                textToTypeRef.current,
-                                startTime,
-                                timerRef.current
-                            );
-                            return 0;
-                        }
-                        return prevTime !== null ? prevTime - 1 : null;
-                    });
-                }
-            }, 1000);
-        } else {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        }
-
-        return () => {
-            if (intervalRef.current) {
-                clearInterval(intervalRef.current);
-                intervalRef.current = null;
-            }
-        };
-    }, [isStarted, isPaused, isFinished, isTimeUp, timeLimit, handleTimeUp, startTime]); // เพิ่ม startTime ใน dependencies
-
-    // NEW EFFECT: Focus the textarea when the game is in a ready state
-    // This effect handles general focus when game states change to a ready state
-    // It complements the specific focus on level change to ensure robustness.
-    useEffect(() => {
-        // Focus only if the game is not started, not paused, not finished, and not time up
-        // This ensures the textarea is enabled and ready to receive input
-        if (!isStarted && !isPaused && !isFinished && !isTimeUp && inputRef.current) {
-            inputRef.current.focus();
-        }
-    }, [isStarted, isPaused, isFinished, isTimeUp]);
-
-
-    /**
-     * @function handleResetGame
-     * @description จัดการการกดปุ่ม "เริ่มใหม่"
-     */
-    const handleResetGame = () => {
-        for (const language of languages) {
-            for (const unit of language.units) {
-                for (const session of unit.sessions) {
-                    const selectedLevel = session.levels.find(l => l.id === currentLevelId);
-                    if (selectedLevel) {
-                        const newSegments = segmentText(selectedLevel.text);
-                        setSegments(newSegments);
-                        segmentsRef.current = newSegments; // Update ref
-                        setTextToType(newSegments[0] || '');
-                        textToTypeRef.current = (newSegments[0] || ''); // Update ref
-                        resetGameStates();
-                        return;
-                    }
-                }
-            }
-        }
-    };
-
-    /**
-     * @function handleStartPause
-     * @description จัดการการกดปุ่ม "เริ่ม/หยุด/ดำเนินต่อ"
-     */
-    const handleStartPause = () => {
-        if (!isStarted) {
-            setIsStarted(true);
-            useStateIsPaused(false); // ใช้ setter ของ isPaused
-            setStartTime(Date.now());
-            // Removed inputRef.current.focus() from here, handled by new useEffect
-        } else {
-            useStateIsPaused(!isPaused); // ใช้ setter ของ isPaused
-        }
-    };
-
-    /**
-     * @function handleInputChange
-     * @description ตรรกะหลักของเกม ทำงานทุกครั้งที่ผู้ใช้พิมพ์ใน <textarea>
-     * แก้ไขให้นับเฉพาะข้อผิดจากการพิมพ์ผิด ไม่นับตัวอักษรที่ไม่ได้พิมพ์
-     */
-    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        const value = e.target.value;
-
-        // เริ่มเกมเมื่อมีการพิมพ์ครั้งแรก
-        if (!isStarted && value.length > 0) {
-            setIsStarted(true);
-            useStateIsPaused(false); // ใช้ setter ของ isPaused
-            setStartTime(Date.now());
-        }
-
-        if (isPaused || isFinished || isTimeUp) return;
-
-        // กรณีที่ 1: พิมพ์ครบ segment และกด space bar เพื่อไป segment ถัดไป
-        if (value.length === textToType.length + 1 && value.endsWith(' ')) {
-            const typedSegment = value.substring(0, textToType.length);
-            const correctCharsInSegment = typedSegment.split('').filter((char, index) => char === textToType[index]).length;
-
-            // นับเฉพาะข้อผิดจากการพิมพ์ผิด
-            const actualErrorsInSegment = typedSegment.length - correctCharsInSegment; // จำนวนที่พิมพ์ผิดใน segment นี้
-
-            // อัปเดตคะแนนรวม
-            const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment + 1; // +1 for the space
-            const newTotalTypedChars = totalTypedChars + textToType.length + 1; // รวม space ด้วย
-            const newTotalErrors = totalErrors + actualErrorsInSegment; // ใช้ actualErrors แทน
-
-            setTotalCorrectChars(newTotalCorrectChars);
-            totalCorrectCharsRef.current = newTotalCorrectChars; // Update ref
-            setTotalTypedChars(newTotalTypedChars);
-            setTotalErrors(newTotalErrors);
-            totalErrorsRef.current = newTotalErrors; // Update ref
-
-            // ไปยัง segment ถัดไป
-            if (currentSegmentIndex + 1 < segments.length) {
-                setCurrentSegmentIndex(prev => prev + 1);
-                currentSegmentIndexRef.current = currentSegmentIndex + 1; // Update ref
-                setTextToType(segments[currentSegmentIndex + 1]);
-                textToTypeRef.current = segments[currentSegmentIndex + 1]; // Update ref
-                setTypedText('');
-                typedTextRef.current = ''; // Update ref
-            } else {
-                // จบเกม
-                setIsFinished(true);
-                setIsStarted(false);
-                const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
-
-                // ใช้ newTotalTypedChars ที่ถูกสะสม
-                const finalWPM = calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th');
-                const finalAccuracy = calculateAccuracy(newTotalCorrectChars, newTotalTypedChars);
-
-                setWpm(finalWPM);
-                setAccuracy(finalAccuracy);
-
-                // Save user stats
-                saveUserStats(
-                    finalWPM,
-                    finalAccuracy,
-                    newTotalErrors,
-                    getGrade(finalWPM, finalAccuracy, newTotalErrors), // ส่งค่า WPM, Accuracy, Errors ไปให้ getGrade
-                    getScore10Point(finalWPM, finalAccuracy, newTotalErrors) // ส่งค่า WPM, Accuracy, Errors ไปให้ getScore10Point
-                );
-            }
-            return;
-        }
-
-        // ป้องกันการพิมพ์เกินความยาวของ segment ปัจจุบัน
-        if (value.length > textToType.length) {
-            return;
-        }
-
-        setTypedText(value);
-        typedTextRef.current = value; // Update ref
-
-        // กรณีที่ 2: พิมพ์ครบ segment สุดท้าย (จบเกม)
-        if (value.length === textToType.length && currentSegmentIndex === segments.length - 1) {
-            const correctCharsInSegment = value.split('').filter((char, index) => char === textToType[index]).length;
-
-            // นับเฉพาะข้อผิดจากการพิมพ์ผิด
-            const actualErrorsInSegment = value.length - correctCharsInSegment; // จำนวนที่พิมพ์ผิดใน segment นี้
-
-            const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment;
-            const newTotalTypedChars = totalTypedChars + textToType.length;
-            const newTotalErrors = totalErrors + actualErrorsInSegment; // ใช้ actualErrors แทน
-
-            setTotalCorrectChars(newTotalCorrectChars);
-            totalCorrectCharsRef.current = newTotalCorrectChars; // Update ref
-            setTotalTypedChars(newTotalTypedChars);
-            setTotalErrors(newTotalErrors);
-            totalErrorsRef.current = newTotalErrors; // Update ref
-
-            setIsFinished(true);
-            setIsStarted(false);
-
-            // ใช้เวลาจริงที่ใช้ในการพิมพ์ ไม่ใช่ timeLimit
-            const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
-            const finalWPM = calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th');
-            const finalAccuracy = calculateAccuracy(newTotalCorrectChars, newTotalTypedChars);
-
-            setWpm(finalWPM);
-            setAccuracy(finalAccuracy);
-
-            // Save user stats
-            saveUserStats(
-                finalWPM,
-                finalAccuracy,
-                newTotalErrors,
-                getGrade(finalWPM, finalAccuracy, newTotalErrors), // ส่งค่า WPM, Accuracy, Errors ไปให้ getGrade
-                getScore10Point(finalWPM, finalAccuracy, newTotalErrors) // ส่งค่า WPM, Accuracy, Errors ไปให้ getScore10Point
-            );
-        }
-    };
-
-    // Firebase Login/Logout Handlers
-    const handleGoogleSignIn = async () => {
-        if (!auth) {
-            console.error("Firebase Auth not initialized.");
-            return;
-        }
-        const provider = new GoogleAuthProvider();
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error) {
-            console.error("Error signing in with Google:", error);
-        }
-    };
-
-    const handleSignOut = async () => {
-        if (!auth) {
-            console.error("Firebase Auth not initialized.");
-            return;
-        }
-        try {
-            await signOut(auth);
-            // Optionally, sign in anonymously after logout if desired
-            // await signInAnonymously(auth);
-        } catch (error) {
-            console.error("Error signing out:", error);
-        }
-    };
-
-    // ฟังก์ชันสำหรับสลับการแสดงผลของเมนู
-    const toggleUnit = (unitId: string) => setExpandedUnits(prev => ({ ...prev, [unitId]: !prev[unitId] }));
-    const toggleSession = (sessionId: string) => setExpandedSessions(prev => ({ ...prev, [sessionId]: !prev[sessionId] }));
-
-    // ---------------------------------------------------------------------------------
-    // F. Rendering Logic (ฟังก์ชันและตัวแปรสำหรับแสดงผล JSX)
-    // ---------------------------------------------------------------------------------
-
-    /**
-     * @function getCurrentLevel
-     * @description ค้นหาและคืนค่าออบเจ็กต์ของด่านปัจจุบัน
-     */
-    const getCurrentLevel = () => {
-        for (const language of languages) {
-            for (const unit of language.units) {
-                for (const session of unit.sessions) {
-                    const level = session.levels.find(l => l.id === currentLevelId);
-                    if (level) return level;
-                }
-            }
-        }
-        return null;
-    };
+    // Add states for LevelSelector expansion
+    // เปลี่ยนค่าเริ่มต้นให้เป็น Object ว่างเปล่า เพื่อให้ useEffect จัดการการขยาย
+    const [expandedLanguage, setExpandedLanguage] = useState<string>('');
+    const [expandedUnits, setExpandedUnits] = useState<{ [key: string]: boolean }>({});
+    const [expandedSessions, setExpandedSessions] = useState<{ [key: string]: boolean }>({});
+
+    // Auth Hook
+    const {
+        user,
+        isAuthReady,
+        userPhotoUrl,
+        userRole,
+        latestUserStats,
+        userLevelProgress,
+        isUserProgressLoaded,
+        handleGoogleSignIn,
+        handleSignOut,
+        isLevelUnlocked,
+    } = useAuth(appId, currentLevelId);
+
+    // Typing Game Hook
+    const {
+        fullTextContent,
+        segments,
+        currentSegmentIndex,
+        textToType,
+        typedText,
+        isStarted,
+        isPaused,
+        isFinished,
+        timer,
+        totalErrors,
+        totalCorrectChars,
+        totalTypedChars,
+        wpm,
+        accuracy,
+        timeLimit,
+        remainingTime,
+        isTimeUp,
+        nextChar,
+        activeFinger,
+        highlightedKeys,
+        keyboardLanguage,
+        isShiftActive,
+        isCapsLockActive,
+        inputRef,
+        handleInputChange,
+        handleStartPause,
+        handleResetGame,
+        getCurrentLevel,
+    } = useTypingGame({ currentLevelId, user, appId }); // Pass user and appId to useTypingGame
 
     const currentLevel = getCurrentLevel();
 
-    // คำนวณความคืบหน้า (Progress Bar)
+    // **********************************************
+    // New: useEffect to automatically expand LevelSelector sections
+    // **********************************************
+    useEffect(() => {
+        if (currentLevel) {
+            // Find the language, unit, and session that contain the currentLevelId
+            for (const lang of languages) {
+                for (const unit of lang.units) {
+                    for (const session of unit.sessions) {
+                        if (session.levels.some(level => level.id === currentLevelId)) {
+                            // Set the expanded states
+                            setExpandedLanguage(lang.id);
+                            setExpandedUnits({ [unit.id]: true });
+                            setExpandedSessions({ [session.id]: true });
+                            console.log(`Auto-expanding: Language=${lang.id}, Unit=${unit.id}, Session=${session.id}`);
+                            return; // Found and set, exit loops
+                        }
+                    }
+                }
+            }
+        }
+    }, [currentLevelId, languages, currentLevel]); // Dependencies: run when currentLevelId or languages change
+    // **********************************************
+
+    // Calculate progress for display
     let completedCharsReal = 0;
     for (let i = 0; i < currentSegmentIndex; i++) {
         completedCharsReal += segments[i].length + 1; // +1 for the space between segments
     }
     const totalProgress = completedCharsReal + typedText.length;
     const totalCharsActual = fullTextContent.length;
-    const progress = totalCharsActual > 0 ? (totalProgress / totalCharsActual) * 100 : 0;
 
-
-    /**
-     * @function formatTime
-     * @description แปลงเวลา (วินาที) เป็นรูปแบบ MM:SS
-     */
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    /**
-     * @function formatTimeWithColor
-     * @description แปลงเวลาเป็นรูปแบบ MM:SS พร้อมกำหนดสีตามเวลาที่เหลือ
-     */
-    const formatTimeWithColor = (seconds: number | null, isCountdown: boolean = false) => {
-        if (seconds === null) return { time: '∞', color: 'text-blue-600' };
-
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        const timeString = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-
-        let colorClass = 'text-blue-600';
-        if (isCountdown && timeLimit !== null) {
-            const percentage = (seconds / timeLimit) * 100;
-            if (percentage <= 10) colorClass = 'text-red-600 animate-pulse';
-            else if (percentage <= 25) colorClass = 'text-orange-600';
-            else if (percentage <= 50) colorClass = 'text-yellow-600';
-        }
-
-        return { time: timeString, color: colorClass };
-    };
-
-    /**
-     * @function renderTextToType
-     * @description สร้าง JSX สำหรับแสดงข้อความที่ต้องพิมพ์ พร้อมไฮไลท์และสไตล์ต่างๆ
-     * มีการจัดการวรรณยุกต์ลอยของภาษาไทย
-     */
-    const renderTextToType = () => {
-        const isLastSegment = currentSegmentIndex === segments.length - 1;
-        const isTypingComplete = typedText.length === textToType.length;
-
-        const toneMarks = ['่', '้', '๊', '๋',];
-        const topVowels = ['ิ', 'ี', 'ึ', 'ื', '์', 'ั'];
-        const saraAm = 'ำ';
-        const tailConsonants = ['ป', 'ฝ', 'ฟ', 'ฬ'];
-
-        const textElements = textToType.split('').map((char, index) => {
-            // กำหนด class สีตามความถูกต้องของการพิมพ์
-            let colorClass = 'text-gray-700';
-            if (index < typedText.length) {
-                colorClass = typedText[index] === char ? 'text-green-600' : 'text-red-600 line-through';
-            }
-
-            // ตรรกะสำหรับจัดการวรรณยุกต์ลอยในภาษาไทย
-            const isToneMark = toneMarks.includes(char);
-            let hasTopVowelBefore = false;
-            let hasSaraAmAfter = false;
-            let hasTailConsonantBefore = false;
-
-            if (isToneMark && index > 0) {
-                if (topVowels.includes(textToType[index - 1])) hasTopVowelBefore = true;
-                else if (index > 1 && topVowels.includes(textToType[index - 2])) hasTopVowelBefore = true;
-                if (index < textToType.length - 1 && textToType[index + 1] === saraAm) hasSaraAmAfter = true;
-
-                // เพิ่มการตรวจสอบพยัญชนะที่มีหาง
-                if (tailConsonants.includes(textToType[index - 1])) hasTailConsonantBefore = true;
-                else if (index > 1 && tailConsonants.includes(textToType[index - 2])) hasTailConsonantBefore = true;
-            }
-
-            const shouldRaiseToneMark = isToneMark && (hasTopVowelBefore || hasSaraAmAfter);
-            const shouldShiftToneMarkLeft = isToneMark && hasTailConsonantBefore && !hasTopVowelBefore; // เพิ่มบรรทัดนี้
-
-            return (
-                <span
-                    key={index}
-                    className={`
-          ${colorClass}
-          ${index === typedText.length ? 'border-b-2 border-blue-500 animate-pulse' : ''}
-          ${shouldRaiseToneMark ? 'thai-tone-mark' : ''}
-          ${shouldShiftToneMarkLeft ? 'thai-tone-mark-left' : ''} // เพิ่มบรรทัดนี้
-        `}
-                >
-                    {char === ' ' && index >= typedText.length ? '\u00A0' : char}
-                </span>
-            );
-        });
-
-        // แสดงข้อความแนะนำให้กด Space Bar เมื่อพิมพ์ครบ segment
-        if (isTypingComplete && !isLastSegment) {
-            textElements.push(
-                <span key="spacebar-hint" className="ml-2 text-blue-600 font-bold animate-pulse">
-                    [กด Space Bar เพื่อดำเนินต่อ]
-                </span>
-            );
-        }
-
-        return textElements;
-    };
-
-    // ---------------------------------------------------------------------------------
-    // G. JSX Rendering (การแสดงผล UI)
-    // ---------------------------------------------------------------------------------
     return (
         <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex flex-col xl:flex-row p-2 sm:p-4 font-inter gap-3 lg:gap-6">
             {/* ======================= เมนูเลือกบทเรียน (ซ้าย) ======================= */}
@@ -1202,139 +135,36 @@ const App: React.FC = () => {
                         เลือกบทเรียน
                     </h2>
                 </div>
+
                 {/* Firebase Login/User Info Section */}
-                <div className="p-3 sm:p-4 lg:p-5 border-b border-gray-200 bg-gray-50 flex justify-center items-center">
-                    {isAuthReady ? (
-                        user ? (
-                            <div className="flex flex-col items-center">
-                                <div>
-                                    {/* MODIFICATION START */}
-                                    {userPhotoUrl ? (
-                                        <img
-                                            src={userPhotoUrl}
-                                            alt="User Avatar"
-                                            className="w-16 h-16 rounded-full mb-2 border-2 border-blue-400 shadow-md"
-                                            onError={() => {
-                                                // Fallback to a placeholder image if the original image fails to load
-                                                setUserPhotoUrl(`https://placehold.co/64x64/A78BFA/ffffff?text=User`);
-                                                console.warn("Failed to load user photo, using placeholder.");
-                                            }}
-                                        />
-                                    ) : (
-                                        // Display a default icon or placeholder if no photo URL is available
-                                        <User size={64} className="text-gray-400 mb-2" />
-                                    )}
-                                    {/* MODIFICATION END */}
-                                </div>
-                                <div className='flex flex-col items-center'>
-                                    <p className="text-sm sm:text-base font-semibold text-gray-800 break-all">{user.displayName || 'ผู้ใช้ Google'}</p>
-                                    <p className="text-xs text-gray-600 mb-2 break-all">{user.email} </p>
-                                    <p className="text-xs text-gray-500 mb-2">บทบาท: <span className="font-bold">{userRole || 'กำลังโหลด...'}</span></p>
-                                </div>
-                                <div className='flex flex-col items-center'>
-                                    <button
-                                        onClick={handleSignOut}
-                                        className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm"
-                                    >
-                                        <LogOut size={16} /> Logout
-                                    </button>
-                                    {/* <p className="text-xs text-gray-500 mt-2">ID: {user.uid}</p> */}
-                                </div>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={handleGoogleSignIn}
-                                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm sm:text-base"
-                            >
-                                <LogIn size={18} /> Login
-                            </button>
-                        )
-                    ) : (
-                        <div className="flex items-center text-gray-500">
-                            <User size={18} className="animate-pulse mr-2" /> กำลังโหลดผู้ใช้...
-                        </div>
-                    )}
-                </div>
-                <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
-                    <div className="space-y-2 sm:space-y-3">
-                        {languages.map((language) => {
-                            const isLanguageActive = language.units.some(unit => unit.sessions.some(session => session.levels.some(level => level.id === currentLevelId)));
-                            return (
-                                <div key={language.id} className="border border-gray-200 rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
-                                    <button
-                                        onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)} // Changed to toggle language based on its own ID
-                                        className={`w-full flex items-center justify-between p-2.5 sm:p-3 lg:p-4 transition-all duration-300 ${isLanguageActive ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500' : 'bg-gray-50 hover:bg-gray-100'}`}
-                                    >
-                                        <span className={`font-bold text-sm sm:text-base ${isLanguageActive ? 'text-blue-700' : 'text-gray-800'}`}>{language.name}</span>
-                                        <div className="flex items-center gap-2">
-                                            {isLanguageActive && <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>}
-                                            {expandedLanguage === language.id ? <ChevronDown size={16} className={`sm:w-5 sm:h-5 transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'}`} /> : <ChevronRight size={16} className={`sm:w-5 sm:h-5 transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'}`} />}
-                                        </div>
-                                    </button>
-                                    {expandedLanguage === language.id && (
-                                        <div className="bg-white border-t border-gray-100">
-                                            <div className="space-y-1.5 sm:space-y-2 p-1.5 sm:p-2">
-                                                {language.units.map((unit) => {
-                                                    const isUnitActive = unit.sessions.some(session => session.levels.some(level => level.id === currentLevelId));
-                                                    return (
-                                                        <div key={unit.id} className="border border-gray-150 rounded-md sm:rounded-lg overflow-hidden shadow-sm">
-                                                            <button onClick={() => toggleUnit(unit.id)} className={`w-full flex items-center justify-between p-2 sm:p-2.5 lg:p-3 transition-all duration-300 ${isUnitActive ? 'bg-gradient-to-r from-blue-25 to-blue-50 border-l-3 border-l-blue-400' : 'bg-gray-25 hover:bg-gray-50'}`}>
-                                                                <span className={`font-semibold text-xs sm:text-sm ${isUnitActive ? 'text-blue-700' : 'text-gray-700'}`}>{unit.name}</span>
-                                                                <div className="flex items-center gap-1.5 sm:gap-2">
-                                                                    {isUnitActive && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-pulse"></div>}
-                                                                    {expandedUnits[unit.id] ? <ChevronDown size={14} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'}`} /> : <ChevronRight size={14} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'}`} />}
-                                                                </div>
-                                                            </button>
-                                                            {expandedUnits[unit.id] && (
-                                                                <div className="bg-white border-t border-gray-100">
-                                                                    <div className="space-y-1 sm:space-y-1.5 p-1.5 sm:p-2">
-                                                                        {unit.sessions.map((session) => {
-                                                                            const isSessionActive = session.levels.some(level => level.id === currentLevelId);
-                                                                            return (
-                                                                                <div key={session.id} className="border border-gray-100 rounded-sm sm:rounded-md overflow-hidden">
-                                                                                    <button onClick={() => toggleSession(session.id)} className={`w-full flex items-center justify-between p-2 sm:p-2.5 transition-all duration-300 ${isSessionActive ? 'bg-gradient-to-r from-blue-25 to-indigo-25 border-l-2 border-l-blue-300' : 'bg-gray-25 hover:bg-gray-50'}`}>
-                                                                                        <span className={`font-medium text-xs ${isSessionActive ? 'text-blue-600' : 'text-gray-600'}`}>{session.name}</span>
-                                                                                        <div className="flex items-center gap-1 sm:gap-1.5">
-                                                                                            {isSessionActive && <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-blue-300 rounded-full animate-pulse"></div>}
-                                                                                            {expandedSessions[session.id] ? <ChevronDown size={12} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'}`} /> : <ChevronRight size={12} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'}`} />}
-                                                                                        </div>
-                                                                                    </button>
-                                                                                    {expandedSessions[session.id] && (
-                                                                                        <div className="bg-white border-t border-gray-50 p-1.5 sm:p-2">
-                                                                                            <div className="space-y-1 sm:space-y-1.5">
-                                                                                                {session.levels.map((level) => (
-                                                                                                    <button
-                                                                                                        key={level.id}
-                                                                                                        onClick={() => setCurrentLevelId(level.id)}
-                                                                                                        disabled={isStarted && !isPaused}
-                                                                                                        className={`w-full text-left p-2 sm:p-2.5 lg:p-3 rounded-md sm:rounded-lg border transition-all duration-300 ease-in-out text-xs font-medium ${currentLevelId === level.id ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-[1.02] ring-2 ring-blue-200 ring-opacity-50' : 'bg-white text-gray-600 border-gray-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md hover:transform hover:scale-[1.01]'} ${(isStarted && !isPaused) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                                                                                    >
-                                                                                                        <div className="flex items-center justify-between">
-                                                                                                            <span className="leading-relaxed">{level.name}</span>
-                                                                                                            {currentLevelId === level.id && (<div className="flex items-center gap-1"><div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full animate-pulse"></div><span className="text-xs opacity-90 hidden sm:inline">กำลังเรียน</span></div>)}
-                                                                                                        </div>
-                                                                                                    </button>
-                                                                                                ))}
-                                                                                            </div>
-                                                                                        </div>
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                <AuthSection
+                    isAuthReady={isAuthReady}
+                    user={user}
+                    userPhotoUrl={userPhotoUrl}
+                    userRole={userRole}
+                    handleGoogleSignIn={handleGoogleSignIn}
+                    handleSignOut={handleSignOut}
+                />
+
+                {/* Level Selector */}
+                <LevelSelector
+                    languages={languages}
+                    currentLevelId={currentLevelId}
+                    setCurrentLevelId={setCurrentLevelId}
+                    isStarted={isStarted}
+                    isPaused={isPaused}
+                    expandedLanguage={expandedLanguage}
+                    setExpandedLanguage={setExpandedLanguage}
+                    expandedUnits={expandedUnits}
+                    setExpandedUnits={setExpandedUnits}
+                    expandedSessions={expandedSessions}
+                    setExpandedSessions={setExpandedSessions}
+                    isLevelUnlocked={isLevelUnlocked}
+                    userLevelProgress={userLevelProgress}
+                    isUserProgressLoaded={isUserProgressLoaded}
+                    user={user}
+                />
+
                 <div className="border-t border-gray-200 p-2 sm:p-3 lg:p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-b-xl lg:rounded-b-2xl">
                     <div className="text-xs text-gray-600 text-center">
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
@@ -1350,254 +180,117 @@ const App: React.FC = () => {
 
             {/* ======================= ส่วนเนื้อหาหลัก (ขวา) ======================= */}
             <main className="bg-white p-4 lg:p-8 rounded-xl lg:rounded-2xl shadow-2xl flex-1 border border-gray-200 min-h-0">
-                {/* แถบแสดงสถิติ */}
-                <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 lg:gap-4 mb-4 lg:mb-6">
-                    <div className="bg-blue-50 p-3 lg:p-4 rounded-lg shadow-md border border-blue-200 flex items-center justify-center space-x-2">
-                        <Clock className="text-blue-600" size={18} />
-                        <p className="text-lg lg:text-xl font-bold text-blue-800">{formatTime(timer)}</p>
-                        <p className="text-xs lg:text-sm font-medium text-blue-700">เวลาที่ใช้</p>
-                    </div>
-
-                    {/* เพิ่มช่องแสดงเวลาที่เหลือ/จำกัด */}
-                    <div className="bg-indigo-50 p-3 lg:p-4 rounded-lg shadow-md border border-indigo-200 flex items-center justify-center space-x-2">
-                        <Timer className="text-indigo-600" size={18} />
-                        <p className={`text-lg lg:text-xl font-bold ${formatTimeWithColor(remainingTime, true).color}`}>
-                            {formatTimeWithColor(remainingTime, true).time}
-                        </p>
-                        <p className="text-xs lg:text-sm font-medium text-indigo-700">
-                            {timeLimit ? 'เหลือ' : 'ไม่จำกัด'}
-                        </p>
-                    </div>
-
-                    <div className="bg-green-50 p-3 lg:p-4 rounded-lg shadow-md border border-green-200 flex items-center justify-center space-x-2">
-                        <Target className="text-green-600" size={18} />
-                        <p className="text-lg lg:text-xl font-bold text-green-800">{wpm}</p>
-                        <p className="text-xs lg:text-sm font-medium text-green-700">WPM</p>
-                    </div>
-                    <div className="bg-purple-50 p-3 lg:p-4 rounded-lg shadow-md border border-purple-200 flex items-center justify-center space-x-2">
-                        <Award className="text-purple-600" size={18} />
-                        <p className="text-lg lg:text-xl font-bold text-purple-800">{accuracy}%</p>
-                        <p className="text-xs lg:text-sm font-medium text-purple-700">ความแม่นยำ</p>
-                    </div>
-                    <div className="bg-red-50 p-3 lg:p-4 rounded-lg shadow-md border border-red-200 flex items-center justify-center space-x-2">
-                        <CircleAlert className="text-red-600" size={18} />
-                        <p className="text-lg lg:text-xl font-bold text-red-800">{totalErrors}</p>
-                        <p className="text-xs lg:text-sm font-medium text-red-700">ข้อผิดพลาด</p>
-                    </div>
-                </div>
-
-                {/* แถบความคืบหน้า */}
-                <div className="mb-4 lg:mb-6">
-                    <div className="flex justify-between text-sm text-gray-600 mb-2">
-                        <span>ความคืบหน้า</span>
-                        <span>{totalProgress} / {totalCharsActual} ตัวอักษร</span>
-                    </div>
-                    <div className="w-full bg-gray-200 rounded-full h-3">
-                        <div className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-300" style={{ width: `${Math.min(progress, 100)}%` }}></div>
-                    </div>
-                </div>
-
-                {/* พื้นที่แสดงข้อความสำหรับพิมพ์ */}
-                <div className="bg-blue-50 p-2 lg:p-4 rounded-lg border border-blue-200 mb-3 lg:mb-4 min-h-[60px] lg:min-h-[70px] flex items-center justify-center text-base md:text-lg lg:text-xl leading-relaxed text-center font-mono relative overflow-hidden whitespace-pre-wrap niramit-regular">
-                    {renderTextToType()}
-                </div>
-
-                {/* Textarea สำหรับรับอินพุต */}
-                <textarea
-                    ref={inputRef}
-                    className="w-full p-2 lg:p-3 border-2 border-blue-300 rounded-lg focus:outline-none focus:ring-4 focus:ring-blue-200 text-base lg:text-lg font-mono resize-none transition duration-200 ease-in-out min-h-[35px] lg:min-h-[45px] mb-3 lg:mb-4"
-                    placeholder={isFinished ? 'กด "เริ่มใหม่" เพื่อเล่นอีกครั้ง' : isPaused ? 'กด "ดำเนินต่อ" เพื่อเล่นต่อ' : 'เริ่มพิมพ์ที่นี่...'}
-                    value={typedText}
-                    onChange={handleInputChange}
-                    disabled={isFinished || isPaused}
-                    autoFocus
+                {/* Stats Display */}
+                <StatsDisplay
+                    timer={timer}
+                    timeLimit={timeLimit}
+                    remainingTime={remainingTime}
+                    wpm={wpm}
+                    accuracy={accuracy}
+                    totalErrors={totalErrors}
+                    totalProgress={totalProgress}
+                    totalCharsActual={totalCharsActual}
                 />
 
-                {/* ปุ่มควบคุมเกม */}
-                <div className="mb-3 lg:mb-4 text-center flex gap-2 justify-center">
-                    <button onClick={handleStartPause} disabled={isFinished} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 text-sm lg:text-base">
-                        {!isStarted ? (<><Play size={16} />เริ่ม</>) : isPaused ? (<><Play size={16} />ดำเนินต่อ</>) : (<><Pause size={16} />หยุด</>)}
-                    </button>
-                    <button onClick={handleResetGame} className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-300 text-sm lg:text-base">
-                        <RotateCcw size={16} />
-                        เริ่มใหม่
-                    </button>
-                </div>
+                {/* Typing Area */}
+                <TypingArea
+                    textToType={textToType}
+                    typedText={typedText}
+                    currentSegmentIndex={currentSegmentIndex}
+                    segments={segments}
+                    isFinished={isFinished}
+                    isPaused={isPaused}
+                    inputRef={inputRef}
+                    handleInputChange={handleInputChange}
+                />
 
-                {/* คีย์บอร์ดเสมือนและการแนะนำนิ้ว */}
+                {/* Game Controls */}
+                <GameControls
+                    isStarted={isStarted}
+                    isPaused={isPaused}
+                    isFinished={isFinished}
+                    handleStartPause={handleStartPause}
+                    handleResetGame={handleResetGame}
+                />
+
+                {/* Virtual Keyboard and Next Char Guidance */}
                 <div className="flex flex-col-reverse lg:flex-row gap-3 lg:gap-4">
-                    <div className="flex-1 p-3 lg:p-4 bg-gray-100 rounded-lg shadow-inner border border-gray-200 overflow-x-auto">
-                        <h2 className="text-base lg:text-lg font-bold text-gray-800 mb-2 lg:mb-3 text-center">คีย์บอร์ด</h2>
-                        <div className="flex flex-col items-center justify-center">
-                            {keyboardRows.map((row, rowIndex) => (
-                                <div key={rowIndex} className="flex my-0.5 lg:my-1">
-                                    {row.map((keyLabel) => {
-                                        const isHighlighted = highlightedKeys.includes(keyLabel);
-                                        const isCapsActive = keyLabel === 'CapsLock' && isCapsLockActive;
-                                        const displayChar = keyLabel.length > 1 ? keyLabel : (isShiftActive || isCapsLockActive ? keyDisplays[keyboardLanguage].shifted[keyLabel as keyof typeof keyDisplays.en.shifted] : keyDisplays[keyboardLanguage].unshifted[keyLabel as keyof typeof keyDisplays.en.unshifted]) || keyLabel;
-                                        return (
-                                            <div key={keyLabel} className={`relative flex items-center justify-center m-0.5 rounded-md text-xs lg:text-sm font-semibold transition-all duration-100 ease-in-out border-b-4 ${isHighlighted ? 'bg-blue-400 text-white border-blue-600 -translate-y-1 shadow-xl' : isCapsActive ? 'bg-blue-300 text-white border-blue-500' : 'bg-gray-200 text-gray-800 border-gray-400 shadow-sm'} ${keyLabel === 'Backspace' ? 'w-16 xl:w-24' : ''} ${keyLabel === 'Tab' ? 'w-12 xl:w-20' : ''} ${keyLabel === '\\' ? 'w-12 xl:w-18' : ''} ${keyLabel === 'CapsLock' ? 'w-16 xl:w-26' : ''} ${keyLabel === 'Enter' ? 'w-16 xl:w-26' : ''} ${keyLabel === 'Shift' || keyLabel === 'ShiftRight' ? 'w-20 xl:w-32' : ''} ${keyLabel === 'Control' || keyLabel === 'ControlRight' ? 'w-20 xl:w-30' : ''} ${keyLabel === 'Alt' || keyLabel === 'AltGr' ? 'w-16 xl:w-18' : ''} ${keyLabel === 'Space' ? 'w-56 xl:w-96' : 'w-8 h-8 xl:w-12 xl:h-12'}`}>
-                                                {displayChar}
-                                            </div>
-                                        );
-                                    })}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                    {(nextChar || (typedText.length === textToType.length && currentSegmentIndex + 1 < segments.length)) && !isFinished && !isPaused && (
-                        <div className=" lg:w-64 p-2 lg:p-3 bg-green-50 rounded-lg border border-green-200 text-center lg:text-left flex flex-col ">
-                            <p className="text-sm lg:text-base font-semibold text-green-800 mb-1 text-center">ตัวอักษรถัดไป:</p>
-                            <p className="text-xl lg:text-2xl font-bold text-green-900 mb-2 text-center">
-                                {typedText.length === textToType.length && currentSegmentIndex + 1 < segments.length ? '[Space] เพื่อดำเนินต่อ' : (nextChar === ' ' ? '[Space]' : nextChar)}
-                            </p>
-                            {activeFinger && (<p className="text-xs lg:text-sm text-green-700 text-center">ใช้นิ้ว: <span className="font-bold">{fingerNamesDisplay[activeFinger]}</span></p>)}
-                        </div>
-                    )}
+                    <VirtualKeyboard
+                        highlightedKeys={highlightedKeys}
+                        isShiftActive={isShiftActive}
+                        isCapsLockActive={isCapsLockActive}
+                        keyboardLanguage={keyboardLanguage}
+                    />
+                    <NextCharGuidance
+                        nextChar={nextChar}
+                        activeFinger={activeFinger}
+                        typedTextLength={typedText.length}
+                        textToTypeLength={textToType.length}
+                        currentSegmentIndex={currentSegmentIndex}
+                        segmentsLength={segments.length}
+                        isFinished={isFinished}
+                        isPaused={isPaused}
+                    />
                 </div>
 
-                {/* ส่วนแสดงผลลัพธ์เมื่อจบเกม */}
-                {isFinished && (
-                    <div className={`mt-4 lg:mt-6 p-4 lg:p-6 rounded-lg ${isTimeUp ? 'bg-orange-50 border border-orange-200' : 'bg-green-50 border border-green-200'}`}>
-                        <h3 className={`text-xl font-bold mb-4 text-center ${isTimeUp ? 'text-orange-800' : 'text-green-800'}`}>
-                            {isTimeUp ? '⏰ หมดเวลา!' : '🎉 ยินดีด้วย! คุณพิมพ์เสร็จแล้ว'}
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center mb-4">
-                            <div>
-                                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>
-                                    {/* แสดงเวลาที่ใช้จริงเสมอ */}
-                                    {formatTime(timer)}
-                                </div>
-                                <div className="text-sm text-gray-600">
-                                    {isTimeUp ? 'เวลาที่ใช้จริง' : 'เวลาที่ใช้'}
-                                </div>
-                            </div>
-                            <div>
-                                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>{wpm}</div>
-                                <div className="text-sm text-gray-600">คำต่อนาที</div>
-                            </div>
-                            <div>
-                                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>{accuracy}%</div>
-                                <div className="text-sm text-gray-600">ความถูกต้อง</div>
-                            </div>
-                            <div>
-                                <div className={`text-2xl font-bold ${isTimeUp ? 'text-orange-600' : 'text-green-600'}`}>{totalErrors}</div>
-                                <div className="text-sm text-gray-600">ข้อผิดพลาด</div>
-                            </div>
-                        </div>
-                        {isTimeUp && (
-                            <div className="mb-4 p-3 bg-orange-100 rounded-lg border border-orange-300">
-                                <p className="text-orange-800 text-center font-medium">
-                                    📊 คะแนนจากจำนวนที่พิมพ์ได้: {totalCorrectChars} ตัวอักษรถูกต้อง จาก {totalTypedChars} ตัวที่พิมพ์
-                                </p>
-                                <p className="text-orange-700 text-center text-sm mt-1">
-                                    ความคืบหน้า: {totalProgress} / {fullTextContent.length} ตัวอักษรทั้งหมด
-                                </p>
-                            </div>
-                        )}
-                        <p className={`text-lg font-semibold text-center ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
-                            เกรด: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getGrade(wpm, accuracy, totalErrors)}</span>
-                        </p>
-                        <p className={`text-lg font-semibold text-center mt-2 ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
-                            คะแนน: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getScore10Point(wpm, accuracy, totalErrors)}/10</span>
-                        </p>
-                    </div>
-                )}
+                {/* Game Results */}
+                <GameResults
+                    isFinished={isFinished}
+                    isTimeUp={isTimeUp}
+                    timer={timer}
+                    wpm={wpm}
+                    accuracy={accuracy}
+                    totalErrors={totalErrors}
+                    totalCorrectChars={totalCorrectChars}
+                    totalTypedChars={totalTypedChars}
+                    fullTextContentLength={fullTextContent.length}
+                    currentLevelId={currentLevelId}
+                    user={user}
+                    latestUserStats={latestUserStats}
+                />
 
-                {/* ส่วนแสดงสถิติล่าสุดของผู้ใช้สำหรับด่านนี้ */}
+                {/* Level Scoring Criteria */}
+                <LevelScoringCriteria
+                    currentLevelId={currentLevelId}
+                    timeLimit={timeLimit}
+                    currentLevelName={currentLevel?.name || null}
+                />
+
+                {/* New: Latest Level Stats Display - แสดงสถิติการเล่นล่าสุดของด่านนี้ */}
                 {user && latestUserStats && (
-                    <div className="mt-4 lg:mt-6 p-4 lg:p-6 rounded-lg bg-blue-50 border border-blue-200">
-                        <h3 className="text-xl font-bold mb-4 text-center text-blue-800">
-                            สถิติการเล่นล่าสุดของแบบฝึกหัดนี้
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.wpm}</div>
-                                <div className="text-sm text-gray-600">WPM</div>
+                    <div className="bg-blue-50 p-4 rounded-xl shadow-inner mt-4 border border-blue-200">
+                        <h3 className="text-lg font-bold text-blue-800 mb-3 text-center">สถิติการเล่นล่าสุดของด่านนี้</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-blue-700">
+                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
+                                <span className="font-medium">WPM:</span>
+                                <span className="font-semibold text-blue-900">{latestUserStats.wpm}</span>
                             </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.accuracy}%</div>
-                                <div className="text-sm text-gray-600">ความแม่นยำ</div>
+                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
+                                <span className="font-medium">ความแม่นยำ:</span>
+                                <span className="font-semibold text-blue-900">{latestUserStats.accuracy}%</span>
                             </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.totalErrors}</div>
-                                <div className="text-sm text-gray-600">ข้อผิดพลาด</div>
+                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
+                                <span className="font-medium">ข้อผิดพลาด:</span>
+                                <span className="font-semibold text-blue-900">{latestUserStats.totalErrors}</span>
                             </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.playCount}</div>
-                                <div className="text-sm text-gray-600">จำนวนครั้งที่เล่น</div>
+                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
+                                <span className="font-medium">จำนวนครั้งที่เล่น:</span>
+                                <span className="font-semibold text-blue-900">{latestUserStats.playCount}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
+                                <span className="font-medium">คะแนน (10):</span>
+                                <span className="font-semibold text-blue-900">{latestUserStats.score10Point}</span>
+                            </div>
+                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
+                                <span className="font-medium">เกรด:</span>
+                                <span className="font-semibold text-blue-900">{latestUserStats.grade}</span>
+                            </div>
+                            <div className="col-span-1 sm:col-span-2 lg:col-span-3 text-center text-xs text-blue-600 mt-2">
+                                <span className="font-medium">เล่นล่าสุด:</span> {new Date(latestUserStats.lastPlayed).toLocaleString('th-TH')}
                             </div>
                         </div>
-                        {/* <p className={`text-lg font-semibold text-center ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
-                            เกรด: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getGrade(wpm, accuracy, totalErrors)}</span>
-                        </p> */}
-                        <p className={`text-lg font-semibold text-center mt-2 ${isTimeUp ? 'text-orange-700' : 'text-blue-600'}`}>
-                            คะแนน: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-blue-600'}`}>{latestUserStats.score10Point
-                            }/10</span>
-                        </p>
-                        <p className="text-sm text-gray-600 text-center mt-4">
-                            เล่นล่าสุด: {new Date(latestUserStats.lastPlayed).toLocaleString()}
-                        </p>
                     </div>
                 )}
-
-                {/* ส่วนแสดงเกณฑ์การให้คะแนน */}
-                <div className="mt-4 lg:mt-6 bg-gray-50 p-4 lg:p-6 rounded-lg border border-gray-200">
-                    <div className="mt-4 lg:mt-6 bg-gray-50 p-4 lg:p-6 rounded-lg border border-gray-200">
-                        <h2 className="text-lg lg:text-xl font-bold text-gray-800 mb-3 lg:mb-4 text-center">
-                            เกณฑ์การให้คะแนนสำหรับ "{currentLevel?.name || 'กำลังโหลด...'}"
-                            {timeLimit && (
-                                <div className="text-sm font-medium text-indigo-600 mt-1">
-                                    ⏱️ เวลาที่กำหนด: {Math.floor(timeLimit / 60)} นาที {timeLimit % 60 !== 0 ? `${timeLimit % 60} วินาที` : ''}
-                                </div>
-                            )}
-                        </h2>
-                        <div className="overflow-x-auto">
-                            {(() => {
-                                const criteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
-
-                                // ตรวจสอบว่าคอลัมน์ไหนควรแสดง
-                                const showWPM = criteria.some(c => c.minWPM > 0);
-                                const showMaxErrors = criteria.some(c => c.maxErrors !== undefined && c.maxErrors > 0);
-                                const showAccuracy = criteria.some(c => c.minAccuracy !== undefined && c.minAccuracy > 0);
-                                const showGrade = criteria.some(c => c.grade && c.grade.trim() !== '');
-                                const showScore = true; // แสดงคะแนนเสมอ
-
-                                return (
-                                    <table className="min-w-full bg-white rounded-lg shadow-sm">
-                                        <thead>
-                                            <tr className="bg-gray-200 text-gray-700 uppercase text-xs lg:text-sm leading-normal">
-                                                {showWPM && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tl-lg">WPM ขั้นต่ำ</th>}
-                                                {showMaxErrors && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tl-lg">ข้อผิดพลาดสูงสุด</th>}
-                                                {showAccuracy && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">ความแม่นยำขั้นต่ำ (%)</th>}
-                                                {showGrade && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left">เกรด</th>}
-                                                {showScore && <th className="py-2 px-3 lg:py-3 lg:px-6 text-left rounded-tr-lg">คะแนน</th>}
-                                            </tr>
-                                        </thead>
-                                        <tbody className="text-gray-600 text-xs lg:text-sm font-light">
-                                            {criteria.map((c, index) => (
-                                                <tr key={index} className="border-b border-gray-200 hover:bg-gray-100">
-                                                    {showWPM && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left font-bold text-red-600">{c.minWPM}</td>}
-                                                    {showMaxErrors && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left font-bold text-red-600">{c.maxErrors}</td>}
-                                                    {showAccuracy && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left">{c.minAccuracy || '-'}</td>}
-                                                    {showGrade && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left whitespace-nowrap font-medium">{c.grade || '-'}</td>}
-                                                    {showScore && <td className="py-2 px-3 lg:py-3 lg:px-6 text-left font-bold text-blue-600">{c.score10Point}</td>}
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                );
-                            })()}
-                            {!scoringCriteria[currentLevelId] && (
-                                <p className="text-xs text-gray-500 mt-2 text-center">
-                                    * ใช้เกณฑ์การให้คะแนนพื้นฐาน {timeLimit ? '(มีเวลาจำกัด)' : '(ไม่จำกัดเวลา)'}
-                                </p>
-                            )}
-                        </div>
-                    </div>
-
-
-                </div>
             </main>
         </div>
     );
