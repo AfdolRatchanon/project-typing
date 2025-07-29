@@ -1,29 +1,12 @@
 // App.tsx
-
-// Declare global variables by extending the Window interface
-// This makes them accessible via window.__app_id and window.__initial_auth_token
-// and helps TypeScript recognize them correctly during build.
-declare global {
-    interface Window {
-        __app_id?: string;
-        __initial_auth_token?: string;
-    }
-}
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert, Timer, LogIn, LogOut, User } from 'lucide-react';
+import { Clock, Target, Award, RotateCcw, Play, Pause, ChevronDown, ChevronRight, CircleAlert, Timer } from 'lucide-react';
 import './App.css';
 import { languages, scoringCriteria } from './data/data';
 
-// Firebase imports
-import type { User as FirebaseUser } from 'firebase/auth';
-import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
-import { ref, set, get, onValue } from 'firebase/database'; // Removed 'update' as it's not used
-import { auth, realtimeDb } from './firebaseConfig'; // Removed 'app' as it's not directly used here
-
 // ===================================================================================
 // I. ข้อมูลและค่าคงที่ (Data & Constants)
-// ส่วนนี้จะเก็บฟังก์ชันเล็กๆ ที่ทำงานเฉพาะอย่างและสามารถนำกลับมาใช้ใหม่ได้
+// ส่วนนี้จะเก็บข้อมูลที่ไม่เปลี่ยนแปลงบ่อย เช่น โครงสร้างคีย์บอร์ด, การจับคู่ตัวอักษร, และข้อมูลคงที่อื่นๆ
 // ===================================================================================
 
 /**
@@ -32,7 +15,6 @@ import { auth, realtimeDb } from './firebaseConfig'; // Removed 'app' as it's no
  */
 const keyboardRows = [
     ['`', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '=', 'Backspace'],
-    // แก้ไข: เปลี่ยน 'i' ตัวที่สองเป็น 'o' เพื่อให้ keyLabel ไม่ซ้ำกัน
     ['Tab', 'q', 'w', 'e', 'r', 't', 'y', 'u', 'i', 'o', 'p', '[', ']', '\\'],
     ['CapsLock', 'a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l', ';', "'", 'Enter'],
     ['Shift', 'z', 'x', 'c', 'v', 'b', 'n', 'm', ',', '.', '/', 'ShiftRight'],
@@ -194,11 +176,6 @@ const segmentText = (text: string, maxCharsPerLine: number = 70): string[] => {
 // III. คอมโพเนนต์หลัก (Main Component)
 // ===================================================================================
 const App: React.FC = () => {
-    // กำหนด appId อย่างปลอดภัย โดยเข้าถึงจาก window object
-    const appId = window.__app_id || 'default-app-id';
-    // เข้าถึง __initial_auth_token อย่างปลอดภัย
-    const initialAuthToken = window.__initial_auth_token;
-
     // ---------------------------------------------------------------------------------
     // A. State Management (การจัดการสถานะ)
     // ---------------------------------------------------------------------------------
@@ -215,7 +192,7 @@ const App: React.FC = () => {
 
     // State สำหรับสถานะของเกม (เริ่ม, หยุด, จบ)
     const [isStarted, setIsStarted] = useState<boolean>(false);
-    const [isPaused, useStateIsPaused] = useState<boolean>(false); // เปลี่ยนชื่อเพื่อใช้เป็น state ภายใน
+    const [isPaused, useStateIsPaused] = useState<boolean>(false); // เปลี่ยนชื่อเพื่อใช้เป็น state ภายใน 
     const [isFinished, setIsFinished] = useState<boolean>(false);
 
     // State สำหรับการจับเวลาและคะแนน
@@ -242,28 +219,6 @@ const App: React.FC = () => {
     const [expandedLanguage, setExpandedLanguage] = useState<string>('thai');
     const [expandedUnits, setExpandedUnits] = useState<{ [key: string]: boolean }>({ 'thai-basic': true });
     const [expandedSessions, setExpandedSessions] = useState<{ [key: string]: boolean }>({ 'thai-basic-session-1': true });
-
-    // Firebase Auth States
-    const [user, setUser] = useState<FirebaseUser | null>(null);
-    const [isAuthReady, setIsAuthReady] = useState<boolean>(false); // To track Firebase auth initialization
-
-    // State for user avatar URL (to handle fallback)
-    const [userPhotoUrl, setUserPhotoUrl] = useState<string | null>(null);
-
-    // State for user role
-    const [userRole, setUserRole] = useState<string | null>(null);
-
-    // State for user's latest stats for the current level
-    const [latestUserStats, setLatestUserStats] = useState<{
-        wpm: number;
-        accuracy: number;
-        totalErrors: number;
-        grade: string;
-        score10Point: number;
-        lastPlayed: number;
-        playCount: number;
-    } | null>(null);
-
 
     // ---------------------------------------------------------------------------------
     // B. Refs (การอ้างอิงถึง DOM Elements และค่าอื่นๆ)
@@ -452,91 +407,52 @@ const App: React.FC = () => {
     /**
      * @callback getGrade
      * @description คำนวณเกรดที่ได้ตามเกณฑ์ของด่านปัจจุบัน (รองรับ optional fields และเกณฑ์พื้นฐาน)
-     * @param {number} currentWPM - WPM ที่คำนวณได้
-     * @param {number} currentAccuracy - ความแม่นยำที่คำนวณได้
-     * @param {number} currentTotalErrors - จำนวนข้อผิดพลาดที่คำนวณได้
      */
-    const getGrade = useCallback((currentWPM: number, currentAccuracy: number, currentTotalErrors: number): string => {
-        // ไม่ต้องตรวจสอบ isFinished ที่นี่ เพราะค่าถูกส่งมาโดยตรงแล้ว
+    const getGrade = useCallback((): string => {
+        if (!isFinished) return '-';
+
+        // ใช้เกณฑ์ที่กำหนดไว้ หรือเกณฑ์พื้นฐาน
         const currentLevelCriteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
 
         for (const criteria of currentLevelCriteria) {
-            const wpmPassed = currentWPM >= criteria.minWPM;
-            const errorsPassed = currentTotalErrors <= criteria.maxErrors;
-            const accuracyPassed = criteria.minAccuracy === undefined || currentAccuracy >= criteria.minAccuracy;
+            // ตรวจสอบ WPM และ maxErrors เสมอ
+            const wpmPassed = wpm >= criteria.minWPM;
+            const errorsPassed = totalErrors <= criteria.maxErrors;
+
+            // ตรวจสอบ accuracy เฉพาะเมื่อมีการกำหนดไว้
+            const accuracyPassed = criteria.minAccuracy === undefined || accuracy >= criteria.minAccuracy;
 
             if (wpmPassed && errorsPassed && accuracyPassed) {
+                // ถ้ามี grade ที่กำหนดไว้ ให้ใช้ grade นั้น ถ้าไม่มีให้สร้างจากคะแนน
                 return criteria.grade || `${criteria.score10Point} คะแนน`;
             }
         }
         return 'ต้องฝึกเพิ่ม';
-    }, [currentLevelId, getDefaultCriteria]);
+    }, [currentLevelId, wpm, accuracy, totalErrors, isFinished, getDefaultCriteria]);
 
 
     /**
      * @callback getScore10Point
      * @description คำนวณคะแนน 10 คะแนนตาม WPM ที่ได้ (รองรับ optional fields และเกณฑ์พื้นฐาน)
-     * @param {number} currentWPM - WPM ที่คำนวณได้
-     * @param {number} currentAccuracy - ความแม่นยำที่คำนวณได้
-     * @param {number} currentTotalErrors - จำนวนข้อผิดพลาดที่คำนวณได้
      */
-    const getScore10Point = useCallback((currentWPM: number, currentAccuracy: number, currentTotalErrors: number): number => {
-        // ไม่ต้องตรวจสอบ isFinished ที่นี่ เพราะค่าถูกส่งมาโดยตรงแล้ว
+    const getScore10Point = useCallback((): number => {
+        if (!isFinished) return 0;
+
+        // ใช้เกณฑ์ที่กำหนดไว้ หรือเกณฑ์พื้นฐาน
         const currentLevelCriteria = scoringCriteria[currentLevelId] || getDefaultCriteria();
 
         // หาเกณฑ์ที่ตรงกับผลการพิมพ์
         for (const criteria of currentLevelCriteria) {
-            const wpmPassed = currentWPM >= criteria.minWPM;
-            const errorsPassed = currentTotalErrors <= criteria.maxErrors;
-            const accuracyPassed = criteria.minAccuracy === undefined || currentAccuracy >= criteria.minAccuracy;
+            const wpmPassed = wpm >= criteria.minWPM;
+            const errorsPassed = totalErrors <= criteria.maxErrors;
+            const accuracyPassed = criteria.minAccuracy === undefined || accuracy >= criteria.minAccuracy;
 
             if (wpmPassed && errorsPassed && accuracyPassed) {
                 return criteria.score10Point;
             }
         }
         return 0; // ถ้าไม่เข้าเกณฑ์ใดเลย
-    }, [currentLevelId, getDefaultCriteria]);
-
-    /**
-     * @function saveUserStats
-     * @description บันทึกสถิติการเล่นของผู้ใช้ลง Realtime Database
-     */
-    const saveUserStats = useCallback(async (
-        finalWPM: number,
-        finalAccuracy: number,
-        finalTotalErrors: number,
-        finalGrade: string,
-        finalScore10Point: number
-    ) => {
-        if (user && realtimeDb) { // เปลี่ยน db เป็น realtimeDb
-            const userStatsPath = `artifacts/${appId}/users/${user.uid}/stats/${currentLevelId}`; // ใช้ appId
-            const userStatsRef = ref(realtimeDb, userStatsPath); // ใช้ realtimeDb
-
-            try {
-                const snapshot = await get(userStatsRef);
-                let currentPlayCount = 0;
-                if (snapshot.exists()) {
-                    currentPlayCount = snapshot.val().playCount || 0;
-                }
-
-                await set(userStatsRef, {
-                    wpm: finalWPM,
-                    accuracy: finalAccuracy,
-                    totalErrors: finalTotalErrors,
-                    grade: finalGrade,
-                    score10Point: finalScore10Point,
-                    lastPlayed: Date.now(),
-                    playCount: currentPlayCount + 1,
-                });
-                console.log("User stats saved successfully!");
-            }
-            // Catch block for error handling
-            catch (error) {
-                console.error("Error saving user stats:", error);
-            }
-        }
-    }, [user, realtimeDb, currentLevelId, appId]); // เพิ่ม appId ใน dependencies
-
+    }, [currentLevelId, wpm, accuracy, totalErrors, isFinished, getDefaultCriteria]);
 
     /**
      * @callback handleTimeUp
@@ -546,7 +462,7 @@ const App: React.FC = () => {
      * @param {number} currentTotalCorrectChars - ค่า totalCorrectChars ล่าสุด
      * @param {number} currentSegmentIdx - ค่า currentSegmentIndex ล่าสุด
      * @param {string[]} allSegments - ค่า segments ล่าสุด
-     * @param {string} currentTextToType - ค่า textToType ล่าsุด
+     * @param {string} currentTextToType - ค่า textToType ล่าสุด
      * @param {number | null} startTs - ค่า startTime ล่าสุด
      * @param {number} currentTimerValue - ค่า timer ล่าสุด
      */
@@ -597,16 +513,7 @@ const App: React.FC = () => {
         setWpm(finalWPM);
         setAccuracy(finalAccuracy);
 
-        // เรียก saveUserStats ด้วยค่าที่คำนวณได้ล่าสุด
-        saveUserStats(
-            finalWPM,
-            finalAccuracy,
-            finalActualErrors,
-            getGrade(finalWPM, finalAccuracy, finalActualErrors), // ส่งค่า WPM, Accuracy, Errors ไปให้ getGrade
-            getScore10Point(finalWPM, finalAccuracy, finalActualErrors) // ส่งค่า WPM, Accuracy, Errors ไปให้ getScore10Point
-        );
-
-    }, [calculateWPM, calculateAccuracy, timeLimit, isTimeUp, isFinished, setIsTimeUp, setIsStarted, setIsFinished, setTotalCorrectChars, setTotalTypedChars, setTotalErrors, setWpm, setAccuracy, saveUserStats, getGrade, getScore10Point]);
+    }, [calculateWPM, calculateAccuracy, timeLimit, isTimeUp, isFinished, setIsTimeUp, setIsStarted, setIsFinished, setTotalCorrectChars, setTotalTypedChars, setTotalErrors, setWpm, setAccuracy]);
 
 
     // ---------------------------------------------------------------------------------
@@ -652,74 +559,6 @@ const App: React.FC = () => {
     // ---------------------------------------------------------------------------------
     // D. Effects (การจัดการ Side Effects)
     // ---------------------------------------------------------------------------------
-
-    // Effect: Initialize Firebase and set up auth listener
-    useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-            setUser(currentUser);
-            setUserPhotoUrl(currentUser?.photoURL || null);
-            setIsAuthReady(true);
-
-            if (currentUser) {
-                // Save user data to Realtime Database if not exists
-                const userRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/profile`); // ใช้ appId
-                const snapshot = await get(userRef);
-
-                if (!snapshot.exists()) {
-                    // New user or user data not yet saved
-                    await set(userRef, {
-                        uid: currentUser.uid,
-                        displayName: currentUser.displayName,
-                        email: currentUser.email,
-                        photoURL: currentUser.photoURL,
-                        role: 'user', // Default role
-                        createdAt: Date.now(),
-                    });
-                    setUserRole('user');
-                } else {
-                    // User exists, retrieve their role
-                    setUserRole(snapshot.val().role || 'user');
-                }
-
-                // Listen for user stats for the current level
-                const userStatsRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/stats/${currentLevelId}`); // ใช้ appId
-                const unsubscribeStats = onValue(userStatsRef, (snapshot) => {
-                    if (snapshot.exists()) {
-                        setLatestUserStats(snapshot.val());
-                    } else {
-                        setLatestUserStats(null);
-                    }
-                });
-                return () => {
-                    unsubscribeStats(); // Clean up stats listener on unmount or user change
-                    unsubscribe(); // Clean up auth listener
-                };
-
-            } else {
-                setUserRole(null);
-                setLatestUserStats(null);
-                // Sign in anonymously if no user and no initial token
-                if (typeof initialAuthToken === 'undefined' || initialAuthToken === null) { // ใช้ initialAuthToken
-                    if (auth) {
-                        // await signInAnonymously(auth); // Commented out to prevent automatic anonymous sign-in if not explicitly desired
-                    }
-                } else { // ถ้ามี initialAuthToken
-                    try {
-                        if (auth) {
-                            // await auth.signInWithCustomToken(initialAuthToken); // Commented out as this is typically handled by Canvas environment
-                        }
-                    } catch (error) {
-                        console.error("Error signing in with custom token:", error);
-                        if (auth) {
-                            // await signInAnonymously(auth); // Commented out
-                        }
-                    }
-                }
-            }
-        });
-
-        return () => unsubscribe();
-    }, [auth, realtimeDb, currentLevelId, appId, initialAuthToken]); // เพิ่ม initialAuthToken ใน dependencies
 
     // Effect: เมื่อ `currentLevelId` เปลี่ยน ให้โหลดข้อความของด่านใหม่
     useEffect(() => {
@@ -776,7 +615,7 @@ const App: React.FC = () => {
         window.addEventListener('keydown', handleKeyDown);
         window.addEventListener('keyup', handleKeyUp);
         return () => {
-            window.removeEventListener('keydown', handleKeyUp);
+            window.removeEventListener('keydown', handleKeyDown);
             window.removeEventListener('keyup', handleKeyUp);
         };
     }, []);
@@ -961,20 +800,8 @@ const App: React.FC = () => {
                 const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
 
                 // ใช้ newTotalTypedChars ที่ถูกสะสม
-                const finalWPM = calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th');
-                const finalAccuracy = calculateAccuracy(newTotalCorrectChars, newTotalTypedChars);
-
-                setWpm(finalWPM);
-                setAccuracy(finalAccuracy);
-
-                // Save user stats
-                saveUserStats(
-                    finalWPM,
-                    finalAccuracy,
-                    newTotalErrors,
-                    getGrade(finalWPM, finalAccuracy, newTotalErrors), // ส่งค่า WPM, Accuracy, Errors ไปให้ getGrade
-                    getScore10Point(finalWPM, finalAccuracy, newTotalErrors) // ส่งค่า WPM, Accuracy, Errors ไปให้ getScore10Point
-                );
+                setWpm(calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th'));
+                setAccuracy(calculateAccuracy(newTotalCorrectChars, newTotalTypedChars));
             }
             return;
         }
@@ -1004,53 +831,22 @@ const App: React.FC = () => {
             setTotalErrors(newTotalErrors);
             totalErrorsRef.current = newTotalErrors; // Update ref
 
+            // Debug log (สามารถเอาออกได้หลังจากแก้ไขเสร็จ)
+            console.log('=== Game completed ===');
+            console.log('value.length:', value.length);
+            console.log('correctCharsInSegment:', correctCharsInSegment);
+            console.log('actualErrorsInSegment (พิมพ์ผิด):', actualErrorsInSegment);
+            console.log('newTotalErrors:', newTotalErrors);
+            console.log('newTotalTypedChars (สะสม):', newTotalTypedChars); // เพิ่ม log นี้
+            console.log('=====================');
+
             setIsFinished(true);
             setIsStarted(false);
 
             // ใช้เวลาจริงที่ใช้ในการพิมพ์ ไม่ใช่ timeLimit
             const timeTaken = (Date.now() - (startTime || Date.now())) / 1000;
-            const finalWPM = calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th');
-            const finalAccuracy = calculateAccuracy(newTotalCorrectChars, newTotalTypedChars);
-
-            setWpm(finalWPM);
-            setAccuracy(finalAccuracy);
-
-            // Save user stats
-            saveUserStats(
-                finalWPM,
-                finalAccuracy,
-                newTotalErrors,
-                getGrade(finalWPM, finalAccuracy, newTotalErrors), // ส่งค่า WPM, Accuracy, Errors ไปให้ getGrade
-                getScore10Point(finalWPM, finalAccuracy, newTotalErrors) // ส่งค่า WPM, Accuracy, Errors ไปให้ getScore10Point
-            );
-        }
-    };
-
-    // Firebase Login/Logout Handlers
-    const handleGoogleSignIn = async () => {
-        if (!auth) {
-            console.error("Firebase Auth not initialized.");
-            return;
-        }
-        const provider = new GoogleAuthProvider();
-        try {
-            await signInWithPopup(auth, provider);
-        } catch (error) {
-            console.error("Error signing in with Google:", error);
-        }
-    };
-
-    const handleSignOut = async () => {
-        if (!auth) {
-            console.error("Firebase Auth not initialized.");
-            return;
-        }
-        try {
-            await signOut(auth);
-            // Optionally, sign in anonymously after logout if desired
-            // await signInAnonymously(auth);
-        } catch (error) {
-            console.error("Error signing out:", error);
+            setWpm(calculateWPM(newTotalCorrectChars, newTotalTypedChars, newTotalErrors, timeTaken, 'th'));
+            setAccuracy(calculateAccuracy(newTotalCorrectChars, newTotalTypedChars));
         }
     };
 
@@ -1201,59 +997,6 @@ const App: React.FC = () => {
                         <Target size={16} className="sm:w-5 sm:h-5" />
                         เลือกบทเรียน
                     </h2>
-                </div>
-                {/* Firebase Login/User Info Section */}
-                <div className="p-3 sm:p-4 lg:p-5 border-b border-gray-200 bg-gray-50 flex justify-center items-center">
-                    {isAuthReady ? (
-                        user ? (
-                            <div className="flex flex-col items-center">
-                                <div>
-                                    {/* MODIFICATION START */}
-                                    {userPhotoUrl ? (
-                                        <img
-                                            src={userPhotoUrl}
-                                            alt="User Avatar"
-                                            className="w-16 h-16 rounded-full mb-2 border-2 border-blue-400 shadow-md"
-                                            onError={() => {
-                                                // Fallback to a placeholder image if the original image fails to load
-                                                setUserPhotoUrl(`https://placehold.co/64x64/A78BFA/ffffff?text=User`);
-                                                console.warn("Failed to load user photo, using placeholder.");
-                                            }}
-                                        />
-                                    ) : (
-                                        // Display a default icon or placeholder if no photo URL is available
-                                        <User size={64} className="text-gray-400 mb-2" />
-                                    )}
-                                    {/* MODIFICATION END */}
-                                </div>
-                                <div className='flex flex-col items-center'>
-                                    <p className="text-sm sm:text-base font-semibold text-gray-800 break-all">{user.displayName || 'ผู้ใช้ Google'}</p>
-                                    <p className="text-xs text-gray-600 mb-2 break-all">{user.email} </p>
-                                    <p className="text-xs text-gray-500 mb-2">บทบาท: <span className="font-bold">{userRole || 'กำลังโหลด...'}</span></p>
-                                </div>
-                                <div className='flex flex-col items-center'>
-                                    <button
-                                        onClick={handleSignOut}
-                                        className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-3 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm"
-                                    >
-                                        <LogOut size={16} /> Logout
-                                    </button>
-                                    {/* <p className="text-xs text-gray-500 mt-2">ID: {user.uid}</p> */}
-                                </div>
-                            </div>
-                        ) : (
-                            <button
-                                onClick={handleGoogleSignIn}
-                                className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 text-sm sm:text-base"
-                            >
-                                <LogIn size={18} /> Login
-                            </button>
-                        )
-                    ) : (
-                        <div className="flex items-center text-gray-500">
-                            <User size={18} className="animate-pulse mr-2" /> กำลังโหลดผู้ใช้...
-                        </div>
-                    )}
                 </div>
                 <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
                     <div className="space-y-2 sm:space-y-3">
@@ -1496,50 +1239,14 @@ const App: React.FC = () => {
                             </div>
                         )}
                         <p className={`text-lg font-semibold text-center ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
-                            เกรด: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getGrade(wpm, accuracy, totalErrors)}</span>
+                            เกรด: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getGrade()}</span>
                         </p>
                         <p className={`text-lg font-semibold text-center mt-2 ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
-                            คะแนน: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getScore10Point(wpm, accuracy, totalErrors)}/10</span>
+                            คะแนน: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getScore10Point()}/10</span>
                         </p>
                     </div>
                 )}
 
-                {/* ส่วนแสดงสถิติล่าสุดของผู้ใช้สำหรับด่านนี้ */}
-                {user && latestUserStats && (
-                    <div className="mt-4 lg:mt-6 p-4 lg:p-6 rounded-lg bg-blue-50 border border-blue-200">
-                        <h3 className="text-xl font-bold mb-4 text-center text-blue-800">
-                            สถิติการเล่นล่าสุดของแบบฝึกหัดนี้
-                        </h3>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.wpm}</div>
-                                <div className="text-sm text-gray-600">WPM</div>
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.accuracy}%</div>
-                                <div className="text-sm text-gray-600">ความแม่นยำ</div>
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.totalErrors}</div>
-                                <div className="text-sm text-gray-600">ข้อผิดพลาด</div>
-                            </div>
-                            <div>
-                                <div className="text-2xl font-bold text-blue-600">{latestUserStats.playCount}</div>
-                                <div className="text-sm text-gray-600">จำนวนครั้งที่เล่น</div>
-                            </div>
-                        </div>
-                        {/* <p className={`text-lg font-semibold text-center ${isTimeUp ? 'text-orange-700' : 'text-green-700'}`}>
-                            เกรด: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-green-900'}`}>{getGrade(wpm, accuracy, totalErrors)}</span>
-                        </p> */}
-                        <p className={`text-lg font-semibold text-center mt-2 ${isTimeUp ? 'text-orange-700' : 'text-blue-600'}`}>
-                            คะแนน: <span className={`font-bold text-xl ${isTimeUp ? 'text-orange-900' : 'text-blue-600'}`}>{latestUserStats.score10Point
-                            }/10</span>
-                        </p>
-                        <p className="text-sm text-gray-600 text-center mt-4">
-                            เล่นล่าสุด: {new Date(latestUserStats.lastPlayed).toLocaleString()}
-                        </p>
-                    </div>
-                )}
 
                 {/* ส่วนแสดงเกณฑ์การให้คะแนน */}
                 <div className="mt-4 lg:mt-6 bg-gray-50 p-4 lg:p-6 rounded-lg border border-gray-200">
