@@ -215,9 +215,150 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
         }
 
         // The very first level is always unlocked (for logged-in users)
+        // ปลดล็อก แบบฝึกหัดย่อยที่ 1.1 
         if (levelId === 'thai-practice-1-1-1') {
             return true;
         }
+        // if (levelId === 'thai-practice-1-1-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-1-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-1-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-1-5') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-1-6') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-1-7') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-1-8') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 1.2 
+        // if (levelId === 'thai-practice-1-2-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-2-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-2-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-2-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-2-5') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 1.3
+        // if (levelId === 'thai-practice-1-3-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-3-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-3-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-3-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-3-5') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 1.4
+        // if (levelId === 'thai-practice-1-4-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-4-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-4-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-4-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-1-4-5') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 2.1
+        // if (levelId === 'thai-practice-2-1-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-1-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-1-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-1-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-1-5') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 2.2
+        // if (levelId === 'thai-practice-2-2-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-2-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-2-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-2-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-2-5') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 2.3
+        // if (levelId === 'thai-practice-2-3-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-3-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-3-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-3-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-3-5') {
+        //     return true;
+        // }
+
+        // // ปลดล็อก แบบฝึกหัดย่อยที่ 2.4
+        // if (levelId === 'thai-practice-2-4-1') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-4-2') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-4-3') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-4-4') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-2-4-5') {
+        //     return true;
+        // }
 
         // Flatten all levels into a single array for easier lookup
         const allLevels = languages.flatMap(lang =>

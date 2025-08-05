@@ -85,7 +85,6 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
         }
     }, [currentLevelId, userLevelProgress, autoAdvance, user, isUserProgressLoaded, languages, isLevelUnlocked, setCurrentLevelId]);
 
-
     const toggleUnit = (unitId: string) => {
         setExpandedUnits(prev => {
             const newState = { ...prev, [unitId]: !prev[unitId] };
@@ -105,10 +104,10 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
     };
 
     return (
-        <div className="flex-1 overflow-y-auto p-2 sm:p-3 lg:p-4 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
-            {/* Checkbox สำหรับเปิด/ปิดการเลื่อนด่านอัตโนมัติ */}
-            <div className="p-2 sm:p-3 lg:p-4 bg-white border-b border-gray-100 flex items-center justify-end rounded-t-lg shadow-sm mb-2">
-                <label htmlFor="autoAdvanceToggle" className="flex items-center cursor-pointer">
+        <div className="flex-1 overflow-y-auto p-3 scrollbar-thin scrollbar-track-gray-100 scrollbar-thumb-gray-300">
+            {/* Auto Advance Toggle - Compact & Elegant */}
+            <div className="mb-3 bg-gradient-to-r from-blue-50/50 to-indigo-50/50 backdrop-blur-sm border border-blue-100/50 rounded-xl p-3 shadow-sm">
+                <label htmlFor="autoAdvanceToggle" className="flex items-center justify-center cursor-pointer group">
                     <input
                         type="checkbox"
                         id="autoAdvanceToggle"
@@ -116,68 +115,131 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                         checked={autoAdvance}
                         onChange={(e) => setAutoAdvance(e.target.checked)}
                     />
-                    <div className="relative w-9 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:border-gray-300 after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
-                    <span className="ml-2 text-sm font-medium text-gray-900">ไปบทเรียนล่าสุดและถัดไปอัตโนมัติ</span>
+                    <div className="relative w-10 h-5 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300/50 rounded-full peer peer-checked:after:translate-x-5 peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:border after:border-gray-300 after:rounded-full after:h-4 after:w-4 after:transition-all after:shadow-sm peer-checked:bg-gradient-to-r peer-checked:from-blue-500 peer-checked:to-blue-600"></div>
+                    <span className="ml-3 text-sm font-medium text-gray-700 group-hover:text-blue-700 transition-colors">
+                        ไปบทเรียนล่าสุดและถัดไปอัตโนมัติ
+                    </span>
                 </label>
             </div>
-            {/* สิ้นสุดส่วน Checkbox */}
 
-            <div className="space-y-2 sm:space-y-3">
+            {/* Content */}
+            <div className="space-y-1.5">
                 {!isUserProgressLoaded ? (
-                    <div className="text-center text-gray-500 py-8">
-                        <p className="animate-pulse">กำลังโหลดบทเรียน...</p>
+                    <div className="text-center text-gray-500 py-12">
+                        <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-4"></div>
+                        <p className="text-sm">กำลังโหลดบทเรียน...</p>
                     </div>
                 ) : (
                     languages.map((language) => {
-                        const isLanguageActive = language.units.some(unit => unit.sessions.some(session => session.levels.some(level => level.id === currentLevelId)));
+                        const isLanguageActive = language.units.some(unit =>
+                            unit.sessions.some(session =>
+                                session.levels.some(level => level.id === currentLevelId)
+                            )
+                        );
+
                         return (
-                            <div key={language.id} className="border border-gray-200 rounded-lg sm:rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-300">
+                            <div key={language.id} className="border border-gray-200/60 rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 bg-white/70 backdrop-blur-sm">
                                 <button
                                     onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)}
-                                    className={`w-full flex items-center justify-between p-2.5 sm:p-3 lg:p-4 transition-all duration-300 ${isLanguageActive ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500' : 'bg-gray-50 hover:bg-gray-100'}`}
+                                    className={`w-full flex items-center justify-between p-3.5 transition-all duration-300 ${isLanguageActive
+                                            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500'
+                                            : 'bg-gray-50/80 hover:bg-gray-100/80'
+                                        }`}
                                 >
-                                    <span className={`font-bold text-sm sm:text-base ${isLanguageActive ? 'text-blue-700' : 'text-gray-800'}`}>{language.name}</span>
+                                    <span className={`font-bold text-base ${isLanguageActive ? 'text-blue-700' : 'text-gray-800'
+                                        }`}>
+                                        {language.name}
+                                    </span>
                                     <div className="flex items-center gap-2">
-                                        {isLanguageActive && <div className="w-2 h-2 sm:w-2.5 sm:h-2.5 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>}
-                                        {expandedLanguage === language.id ? <ChevronDown size={16} className={`sm:w-5 sm:h-5 transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'}`} /> : <ChevronRight size={16} className={`sm:w-5 sm:h-5 transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'}`} />}
+                                        {isLanguageActive && (
+                                            <div className="w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse shadow-sm"></div>
+                                        )}
+                                        {expandedLanguage === language.id ? (
+                                            <ChevronDown size={18} className={`transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'
+                                                }`} />
+                                        ) : (
+                                            <ChevronRight size={18} className={`transition-transform duration-200 ${isLanguageActive ? 'text-blue-600' : 'text-gray-600'
+                                                }`} />
+                                        )}
                                     </div>
                                 </button>
+
                                 {expandedLanguage === language.id && (
-                                    <div className="bg-white border-t border-gray-100">
-                                        <div className="space-y-1.5 sm:space-y-2 p-1.5 sm:p-2">
+                                    <div className="bg-white/90 border-t border-gray-100">
+                                        <div className="space-y-1 p-2">
                                             {language.units.map((unit) => {
-                                                const isUnitActive = unit.sessions.some(session => session.levels.some(level => level.id === currentLevelId));
+                                                const isUnitActive = unit.sessions.some(session =>
+                                                    session.levels.some(level => level.id === currentLevelId)
+                                                );
+
                                                 return (
-                                                    <div key={unit.id} className="border border-gray-150 rounded-md sm:rounded-lg overflow-hidden shadow-sm">
-                                                        <button onClick={() => toggleUnit(unit.id)} className={`w-full flex items-center justify-between p-2 sm:p-2.5 lg:p-3 transition-all duration-300 ${isUnitActive ? 'bg-gradient-to-r from-blue-25 to-blue-50 border-l-3 border-l-blue-400' : 'bg-gray-25 hover:bg-gray-50'}`}>
-                                                            <span className={`font-semibold text-xs sm:text-sm ${isUnitActive ? 'text-blue-700' : 'text-gray-700'}`}>{unit.name}</span>
-                                                            <div className="flex items-center gap-1.5 sm:gap-2">
-                                                                {isUnitActive && <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-blue-400 rounded-full animate-pulse"></div>}
-                                                                {expandedUnits[unit.id] ? <ChevronDown size={14} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'}`} /> : <ChevronRight size={14} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'}`} />}
+                                                    <div key={unit.id} className="border border-gray-150/60 rounded-lg overflow-hidden shadow-sm bg-white/50">
+                                                        <button
+                                                            onClick={() => toggleUnit(unit.id)}
+                                                            className={`w-full flex items-center justify-between p-3 transition-all duration-300 ${isUnitActive
+                                                                    ? 'bg-gradient-to-r from-blue-25 to-blue-50 border-l-3 border-l-blue-400'
+                                                                    : 'bg-gray-25/80 hover:bg-gray-50/80'
+                                                                }`}
+                                                        >
+                                                            <span className={`font-semibold text-sm ${isUnitActive ? 'text-blue-700' : 'text-gray-700'
+                                                                }`}>
+                                                                {unit.name}
+                                                            </span>
+                                                            <div className="flex items-center gap-1.5">
+                                                                {isUnitActive && (
+                                                                    <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+                                                                )}
+                                                                {expandedUnits[unit.id] ? (
+                                                                    <ChevronDown size={16} className={`transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'
+                                                                        }`} />
+                                                                ) : (
+                                                                    <ChevronRight size={16} className={`transition-transform duration-200 ${isUnitActive ? 'text-blue-600' : 'text-gray-500'
+                                                                        }`} />
+                                                                )}
                                                             </div>
                                                         </button>
+
                                                         {expandedUnits[unit.id] && (
-                                                            <div className="bg-white border-t border-gray-100">
-                                                                <div className="space-y-1 sm:space-y-1.5 p-1.5 sm:p-2">
+                                                            <div className="bg-white/95 border-t border-gray-100/60">
+                                                                <div className="space-y-0.5 p-1.5">
                                                                     {unit.sessions.map((session) => {
                                                                         const isSessionActive = session.levels.some(level => level.id === currentLevelId);
+
                                                                         return (
-                                                                            <div key={session.id} className="border border-gray-100 rounded-sm sm:rounded-md overflow-hidden">
-                                                                                <button onClick={() => toggleSession(session.id)} className={`w-full flex items-center justify-between p-2 sm:p-2.5 transition-all duration-300 ${isSessionActive ? 'bg-gradient-to-r from-blue-25 to-indigo-25 border-l-2 border-l-blue-300' : 'bg-gray-25 hover:bg-gray-50'}`}>
-                                                                                    <span className={`font-medium text-xs ${isSessionActive ? 'text-blue-600' : 'text-gray-600'}`}>{session.name}</span>
-                                                                                    <div className="flex items-center gap-1 sm:gap-1.5">
-                                                                                        {isSessionActive && <div className="w-1 h-1 sm:w-1.5 sm:h-1.5 bg-blue-300 rounded-full animate-pulse"></div>}
-                                                                                        {expandedSessions[session.id] ? <ChevronDown size={12} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'}`} /> : <ChevronRight size={12} className={`sm:w-4 sm:h-4 transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'}`} />}
+                                                                            <div key={session.id} className="border border-gray-100/80 rounded-md overflow-hidden bg-white/40">
+                                                                                <button
+                                                                                    onClick={() => toggleSession(session.id)}
+                                                                                    className={`w-full flex items-center justify-between p-2.5 transition-all duration-300 ${isSessionActive
+                                                                                            ? 'bg-gradient-to-r from-blue-25 to-indigo-25 border-l-2 border-l-blue-300'
+                                                                                            : 'bg-gray-25/60 hover:bg-gray-50/60'
+                                                                                        }`}
+                                                                                >
+                                                                                    <span className={`font-medium text-sm ${isSessionActive ? 'text-blue-600' : 'text-gray-600'
+                                                                                        }`}>
+                                                                                        {session.name}
+                                                                                    </span>
+                                                                                    <div className="flex items-center gap-1">
+                                                                                        {isSessionActive && (
+                                                                                            <div className="w-1.5 h-1.5 bg-blue-300 rounded-full animate-pulse"></div>
+                                                                                        )}
+                                                                                        {expandedSessions[session.id] ? (
+                                                                                            <ChevronDown size={14} className={`transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'
+                                                                                                }`} />
+                                                                                        ) : (
+                                                                                            <ChevronRight size={14} className={`transition-transform duration-200 ${isSessionActive ? 'text-blue-500' : 'text-gray-400'
+                                                                                                }`} />
+                                                                                        )}
                                                                                     </div>
                                                                                 </button>
+
                                                                                 {expandedSessions[session.id] && (
-                                                                                    <div className="bg-white border-t border-gray-50 p-1.5 sm:p-2">
-                                                                                        <div className="space-y-1 sm:space-y-1.5">
+                                                                                    <div className="bg-white border-t border-gray-50/80 p-1.5">
+                                                                                        <div className="space-y-1">
                                                                                             {session.levels.map((level) => {
                                                                                                 const unlocked = isLevelUnlocked(level.id);
                                                                                                 const playCountForLevel = userLevelProgress[level.id]?.playCount || 0;
                                                                                                 const requiredPlayCount = 3;
-                                                                                                const requiredScore = 5; // Required score for unlocking
+                                                                                                const requiredScore = 5;
                                                                                                 const isFirstLevel = level.id === 'thai-practice-1-1-1';
 
                                                                                                 let tooltipText = '';
@@ -205,18 +267,27 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                                                                                                             }
                                                                                                         }}
                                                                                                         disabled={!unlocked || (isStarted && !isPaused)}
-                                                                                                        className={`w-full text-left p-2 sm:p-2.5 lg:p-3 rounded-md sm:rounded-lg border transition-all duration-300 ease-in-out text-xs font-medium relative
-                                                                                                            ${currentLevelId === level.id ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-[1.02] ring-2 ring-blue-200 ring-opacity-50' : 'bg-white text-gray-600 border-gray-200 hover:bg-blue-50 hover:border-blue-300 hover:shadow-md hover:transform hover:scale-[1.01]'}
-                                                                                                            ${(!unlocked || (isStarted && !isPaused)) ? 'opacity-50 cursor-not-allowed' : ''}
-                                                                                                        `}
+                                                                                                        className={`w-full text-left p-2.5 rounded-lg border transition-all duration-300 ease-in-out text-sm font-medium relative group ${currentLevelId === level.id
+                                                                                                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-[1.01] ring-2 ring-blue-200/50'
+                                                                                                                : 'bg-white/80 text-gray-600 border-gray-200/60 hover:bg-blue-50/80 hover:border-blue-300/60 hover:shadow-md hover:transform hover:scale-[1.005]'
+                                                                                                            } ${(!unlocked || (isStarted && !isPaused)) ? 'opacity-50 cursor-not-allowed' : ''
+                                                                                                            }`}
                                                                                                         title={!unlocked ? tooltipText : ''}
                                                                                                     >
                                                                                                         <div className="flex items-center justify-between">
                                                                                                             <span className="leading-relaxed">{level.name}</span>
-                                                                                                            <div className="flex items-center gap-1">
-                                                                                                                {currentLevelId === level.id && (<div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full animate-pulse"></div>)}
-                                                                                                                {!unlocked && <Lock size={14} className="text-gray-400 ml-1" />}
-                                                                                                                {currentLevelId === level.id && (<span className="text-xs opacity-90 hidden sm:inline">กำลังเรียน</span>)}
+                                                                                                            <div className="flex items-center gap-1.5">
+                                                                                                                {currentLevelId === level.id && (
+                                                                                                                    <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                                                                                                                )}
+                                                                                                                {!unlocked && (
+                                                                                                                    <Lock size={14} className="text-gray-400" />
+                                                                                                                )}
+                                                                                                                {currentLevelId === level.id && (
+                                                                                                                    <span className="text-xs opacity-90 hidden sm:inline font-normal">
+                                                                                                                        กำลังเรียน
+                                                                                                                    </span>
+                                                                                                                )}
                                                                                                             </div>
                                                                                                         </div>
                                                                                                     </button>

@@ -115,12 +115,12 @@ const TypingArea: React.FC<TypingAreaProps> = ({
         onChange={handleInputChange}
         disabled={isFinished || isPaused}
         autoFocus
-        // เพิ่ม onKeyDown เพื่อป้องกัน Backspace/Delete key
-        onKeyDown={(e) => {
-          if (e.key === 'Backspace' || e.key === 'Delete') {
-            e.preventDefault(); // ป้องกันการทำงานเริ่มต้นของ Backspace/Delete
-          }
-        }}
+      // เพิ่ม onKeyDown เพื่อป้องกัน Backspace/Delete key
+      // onKeyDown={(e) => {
+      //   if (e.key === 'Backspace' || e.key === 'Delete') {
+      //     e.preventDefault(); // ป้องกันการทำงานเริ่มต้นของ Backspace/Delete
+      //   }
+      // }}
       />
     </>
   );
