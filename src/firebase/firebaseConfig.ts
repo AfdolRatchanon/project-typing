@@ -5,10 +5,6 @@ import { getDatabase } from "firebase/database"; // สำหรับ Realtime 
 
 // Your web app's Firebase configuration (ต้องใส่ข้อมูลของคุณเอง)
 const firebaseConfig = {
-  apiKey: "AIzaSyBrr1L5nVZYcqkPI_zj4VspFDenSACtlKY",
-  authDomain: "typing-demo-2f203.firebaseapp.com",
-  projectId: "typing-demo-2f203",
-  databaseURL: "https://typing-demo-2f203-default-rtdb.asia-southeast1.firebasedatabase.app",
   // apiKey: "YOUR_API_KEY",
   // authDomain: "YOUR_AUTH_DOMAIN",
   // projectId: "YOUR_PROJECT_ID",

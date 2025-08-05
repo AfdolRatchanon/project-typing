@@ -1,6 +1,6 @@
 // src/components/LevelSelector.tsx
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronRight, Lock } from 'lucide-react';
 import type { Language, LevelStats } from '../types/types';
 
