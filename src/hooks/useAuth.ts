@@ -37,19 +37,13 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
     const [userLevelProgress, setUserLevelProgress] = useState<{ [levelId: string]: LevelStats | undefined }>({});
     const [isUserProgressLoaded, setIsUserProgressLoaded] = useState<boolean>(false);
 
-    // Access __initial_auth_token safely
-    // const initialAuthToken = typeof window !== 'undefined' ? window.__initial_auth_token : undefined;
-
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
-            setUserPhotoUrl(currentUser?.photoURL || null);
             setIsAuthReady(true);
-            // Log to track authentication status
             console.log("Auth State Changed. User:", currentUser ? currentUser.uid : "null");
 
             if (currentUser) {
-                // Save user data to Realtime Database if not exists
                 const userRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/profile`);
                 try {
                     const snapshot = await get(userRef);
@@ -60,17 +54,24 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
                             uid: currentUser.uid,
                             displayName: currentUser.displayName,
                             email: currentUser.email,
-                            photoURL: currentUser.photoURL,
+                            photoURL: currentUser.photoURL, // Save the photoURL from auth
                             role: 'user', // Default role
                             createdAt: Date.now(),
                         });
                         setUserRole('user');
+                        // Use the photoURL from the current user (which was just saved)
+                        setUserPhotoUrl(currentUser.photoURL || null);
                     } else {
-                        // User exists, retrieve their role
-                        setUserRole(snapshot.val().role || 'user');
+                        // User exists, retrieve their role and photoURL from RealtimeDB
+                        const userData = snapshot.val();
+                        setUserRole(userData.role || 'user');
+                        // *** ดึง photoURL จาก Realtime Database แทน ***
+                        setUserPhotoUrl(userData.photoURL || null);
                     }
                 } catch (error) {
                     console.error("Error managing user profile in RealtimeDB:", error);
+                    // Fallback to photoURL from currentUser if there's a DB error
+                    setUserPhotoUrl(currentUser.photoURL || null);
                 }
 
                 // Listen for user stats for the current level
@@ -89,14 +90,12 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
                     if (snapshot.exists()) {
                         const progress = snapshot.val() as { [levelId: string]: LevelStats };
                         setUserLevelProgress(progress);
-                        // Log to confirm progress data is loaded
                         console.log("User Level Progress Loaded:", progress);
                     } else {
                         setUserLevelProgress({});
                         console.log("No User Level Progress found.");
                     }
                     setIsUserProgressLoaded(true);
-                    // Log to confirm isUserProgressLoaded is true
                     console.log("isUserProgressLoaded set to TRUE (from currentUser block)");
                 });
 
@@ -106,17 +105,17 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
                 };
 
             } else {
+                setUserPhotoUrl(null); // Clear photo URL on sign out
                 setUserRole(null);
                 setLatestUserStats(null);
                 setUserLevelProgress({});
-                setIsUserProgressLoaded(true); // This should make it true even when not logged in
-                // Log to confirm isUserProgressLoaded is true even when not logged in
+                setIsUserProgressLoaded(true);
                 console.log("isUserProgressLoaded set to TRUE (from !currentUser block)");
             }
         });
 
         return () => unsubscribe();
-    }, [auth, realtimeDb, appId, currentLevelId]); // currentLevelId added to dependencies to re-listen for specific level stats
+    }, [auth, realtimeDb, appId, currentLevelId]);
 
     const handleGoogleSignIn = async () => {
         if (!auth) {
@@ -150,18 +149,14 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
      * @returns {boolean} - true ถ้าปลดล็อก, false ถ้าล็อก
      */
     const isLevelUnlocked = useCallback((levelId: string): boolean => {
-        // If user is not logged in, unlock all levels
         if (!user) {
             return true; // Unlock all levels when not logged in
         }
 
-        // The very first level is always unlocked (for logged-in users)
         if (levelId === 'thai-practice-1-1-1') {
             return true;
         }
 
-        // Flatten all levels into a single array for easier lookup
-        // Combine all levels from all languages, units, and sessions into a single array
         const allLevels = languages.flatMap(lang =>
             lang.units.flatMap(unit =>
                 unit.sessions.flatMap(session => session.levels)
@@ -170,37 +165,29 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
 
         const currentLevelIndex = allLevels.findIndex(level => level.id === levelId);
 
-        // If the current level is not found, consider it locked (should not happen if levelId is correct)
         if (currentLevelIndex === -1) {
             return false;
         }
 
-        // If it's the first level (currentLevelIndex === 0) and not 'thai-practice-1-1-1' (which is handled above),
-        // or if there's no previous level (e.g., it's the first level of a session/unit/language that is not 'thai-practice-1-1-1'),
-        // it should be locked.
         if (currentLevelIndex === 0) {
-            return false; // The first level that is not 'thai-practice-1-1-1' should be locked
+            return false;
         }
 
         const previousLevel = allLevels[currentLevelIndex - 1];
 
-        // Check if there is a previous level
         if (!previousLevel) {
-            return false; // If no previous level, it indicates an issue or it's an unassigned first level
+            return false;
         }
 
         const previousLevelStats = userLevelProgress[previousLevel.id];
         const previousLevelPlayCount = previousLevelStats?.playCount || 0;
-        const previousLevelScore = previousLevelStats?.score10Point || 0; // Get score for the previous level
+        const previousLevelScore = previousLevelStats?.score10Point || 0;
 
-        const requiredPlayCount = 3; // Required play count to unlock the next level
-        const requiredScore = 5;    // Required score (out of 10) to unlock the next level
+        const requiredPlayCount = 3;
+        const requiredScore = 5;
 
-        // Return true if the previous level has been played the required number of times
-        // AND achieved the required score
         return previousLevelPlayCount >= requiredPlayCount && previousLevelScore > requiredScore;
     }, [user, userLevelProgress, languages]);
-
 
     return {
         user,
