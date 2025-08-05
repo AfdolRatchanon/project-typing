@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { ref, set, get, onValue } from 'firebase/database';
+import { ref, set, get, onValue, update } from 'firebase/database';
 import { auth, realtimeDb } from '../firebase/firebaseConfig';
 import type { LevelStats } from '../types/types';
 import { languages } from '../data/data'; // Import languages data
@@ -37,6 +37,20 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
     const [userLevelProgress, setUserLevelProgress] = useState<{ [levelId: string]: LevelStats | undefined }>({});
     const [isUserProgressLoaded, setIsUserProgressLoaded] = useState<boolean>(false);
 
+    // Function to create a safer photo URL (avoiding rate limits)
+    const getSafePhotoUrl = (originalUrl: string | null): string | null => {
+        if (!originalUrl) return null;
+
+        // If it's a Google Photos URL, try to modify it to a more stable format
+        if (originalUrl.includes('googleusercontent.com')) {
+            // Remove size parameters and add a more stable size
+            const baseUrl = originalUrl.split('=')[0];
+            return `${baseUrl}=s64-c`; // Use smaller size to reduce rate limiting
+        }
+
+        return originalUrl;
+    };
+
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
@@ -44,34 +58,80 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
             console.log("Auth State Changed. User:", currentUser ? currentUser.uid : "null");
 
             if (currentUser) {
+                // Reference to user profile in Realtime Database
                 const userRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/profile`);
+
                 try {
                     const snapshot = await get(userRef);
 
                     if (!snapshot.exists()) {
-                        // New user or user data not yet saved
-                        await set(userRef, {
+                        // New user - create profile with safe photo URL
+                        const safePhotoUrl = getSafePhotoUrl(currentUser.photoURL);
+
+                        const profileData = {
                             uid: currentUser.uid,
                             displayName: currentUser.displayName,
                             email: currentUser.email,
-                            photoURL: currentUser.photoURL, // Save the photoURL from auth
-                            role: 'user', // Default role
+                            photoURL: safePhotoUrl,
+                            originalPhotoURL: currentUser.photoURL, // Keep original for reference
+                            role: 'user',
                             createdAt: Date.now(),
-                        });
+                            lastPhotoUpdate: Date.now()
+                        };
+
+                        await set(userRef, profileData);
                         setUserRole('user');
-                        // Use the photoURL from the current user (which was just saved)
-                        setUserPhotoUrl(currentUser.photoURL || null);
+                        setUserPhotoUrl(safePhotoUrl);
+                        console.log("New user profile created with safe photo URL");
                     } else {
-                        // User exists, retrieve their role and photoURL from RealtimeDB
+                        // Existing user - get data from database
                         const userData = snapshot.val();
                         setUserRole(userData.role || 'user');
-                        // *** ดึง photoURL จาก Realtime Database แทน ***
-                        setUserPhotoUrl(userData.photoURL || null);
+
+                        // Check if we need to update photo URL (only if original URL changed)
+                        const lastPhotoUpdate = userData.lastPhotoUpdate || 0;
+                        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000); // 1 day in ms
+                        const originalPhotoChanged = userData.originalPhotoURL !== currentUser.photoURL;
+
+                        if (userData.photoURL && !originalPhotoChanged && lastPhotoUpdate > oneDayAgo) {
+                            // Use cached photo URL if it's recent and original hasn't changed
+                            setUserPhotoUrl(userData.photoURL);
+                            console.log("Using cached photo URL from database");
+                        } else {
+                            // Update photo URL (either original changed or cache is old)
+                            const safePhotoUrl = getSafePhotoUrl(currentUser.photoURL);
+                            setUserPhotoUrl(safePhotoUrl);
+
+                            const photoUpdates: any = {
+                                photoURL: safePhotoUrl,
+                                originalPhotoURL: currentUser.photoURL,
+                                lastPhotoUpdate: Date.now()
+                            };
+
+                            await update(userRef, photoUpdates);
+                            console.log("Updated photo URL in database");
+                        }
+
+                        // Update other profile fields if they've changed
+                        const updates: any = {};
+                        if (userData.displayName !== currentUser.displayName) {
+                            updates.displayName = currentUser.displayName;
+                        }
+                        if (userData.email !== currentUser.email) {
+                            updates.email = currentUser.email;
+                        }
+
+                        if (Object.keys(updates).length > 0) {
+                            await update(userRef, updates);
+                            console.log("Updated user profile fields");
+                        }
                     }
                 } catch (error) {
                     console.error("Error managing user profile in RealtimeDB:", error);
-                    // Fallback to photoURL from currentUser if there's a DB error
-                    setUserPhotoUrl(currentUser.photoURL || null);
+                    // Fallback to safe photo URL without database
+                    const safePhotoUrl = getSafePhotoUrl(currentUser.photoURL);
+                    setUserPhotoUrl(safePhotoUrl);
+                    setUserRole('user');
                 }
 
                 // Listen for user stats for the current level
@@ -105,10 +165,10 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
                 };
 
             } else {
-                setUserPhotoUrl(null); // Clear photo URL on sign out
                 setUserRole(null);
                 setLatestUserStats(null);
                 setUserLevelProgress({});
+                setUserPhotoUrl(null);
                 setIsUserProgressLoaded(true);
                 console.log("isUserProgressLoaded set to TRUE (from !currentUser block)");
             }
@@ -149,14 +209,17 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
      * @returns {boolean} - true ถ้าปลดล็อก, false ถ้าล็อก
      */
     const isLevelUnlocked = useCallback((levelId: string): boolean => {
+        // If user is not logged in, unlock all levels
         if (!user) {
-            return true; // Unlock all levels when not logged in
+            return true;
         }
 
+        // The very first level is always unlocked (for logged-in users)
         if (levelId === 'thai-practice-1-1-1') {
             return true;
         }
 
+        // Flatten all levels into a single array for easier lookup
         const allLevels = languages.flatMap(lang =>
             lang.units.flatMap(unit =>
                 unit.sessions.flatMap(session => session.levels)
@@ -165,16 +228,19 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
 
         const currentLevelIndex = allLevels.findIndex(level => level.id === levelId);
 
+        // If the current level is not found, consider it locked
         if (currentLevelIndex === -1) {
             return false;
         }
 
+        // If it's the first level and not 'thai-practice-1-1-1', it should be locked
         if (currentLevelIndex === 0) {
             return false;
         }
 
         const previousLevel = allLevels[currentLevelIndex - 1];
 
+        // Check if there is a previous level
         if (!previousLevel) {
             return false;
         }

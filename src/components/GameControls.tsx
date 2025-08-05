@@ -1,7 +1,10 @@
 // src/components/GameControls.tsx
 
 import React from 'react';
-import { Play, Pause, RotateCcw } from 'lucide-react';
+import {
+    // Play, Pause,
+    RotateCcw
+} from 'lucide-react';
 
 interface GameControlsProps {
     isStarted: boolean;
@@ -17,24 +20,25 @@ interface GameControlsProps {
  * @param {GameControlsProps} props - Props for GameControls component.
  */
 const GameControls: React.FC<GameControlsProps> = ({
-    isStarted,
-    isPaused,
+    // isStarted,
+    // isPaused,
     isFinished,
-    handleStartPause,
+    // handleStartPause,
     handleResetGame,
 }) => {
     return (
         <div className="mb-3 lg:mb-4 text-center flex gap-2 justify-center">
-            <button
+            {/* <button
                 onClick={handleStartPause}
-                disabled={isFinished}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 text-sm lg:text-base"
+                disabled={isFinished} // ปุ่ม Start/Pause/Resume จะถูก disabled เมื่อเกมจบ
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:opacity-50 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-blue-300 text-sm lg:text-base"
             >
                 {!isStarted ? (<><Play size={16} />เริ่ม</>) : isPaused ? (<><Play size={16} />ดำเนินต่อ</>) : (<><Pause size={16} />หยุด</>)}
-            </button>
+            </button> */}
             <button
                 onClick={handleResetGame}
-                className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-300 text-sm lg:text-base"
+                disabled={!isFinished}
+                className="flex items-center gap-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:opacity-50 text-white font-bold py-2 px-4 lg:py-3 lg:px-6 rounded-lg shadow-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-4 focus:ring-gray-300 text-sm lg:text-base"
             >
                 <RotateCcw size={16} />
                 เริ่มใหม่
