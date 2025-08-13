@@ -2,8 +2,8 @@
 
 // สำคัญ: การ import React นี้จำเป็นเพื่อให้ TypeScript รู้จัก JSX namespace
 import React from 'react';
-// import { detectTextLanguage } from '../utils/textUtils'; // ไม่ได้ใช้ในคอมโพเนนต์นี้โดยตรง
 
+// Interface for the component's props
 interface TypingAreaProps {
   textToType: string;
   typedText: string;
@@ -11,7 +11,7 @@ interface TypingAreaProps {
   segments: string[];
   isFinished: boolean;
   isPaused: boolean;
-  inputRef: React.RefObject<HTMLTextAreaElement | null>; // แก้ไขให้รับค่า null ได้
+  inputRef: React.RefObject<HTMLTextAreaElement | null>;
   handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
 }
 
@@ -25,7 +25,6 @@ interface TypingAreaProps {
  * @param {string[]} segments - All segments of the full text.
  * @returns {React.JSX.Element[]} - Array of JSX elements for rendering.
  */
-// แก้ไข: เปลี่ยน JSX.Element[] เป็น React.JSX.Element[]
 const renderTextToType = (textToType: string, typedText: string, currentSegmentIndex: number, segments: string[]): React.JSX.Element[] => {
   const isLastSegment = currentSegmentIndex === segments.length - 1;
   const isTypingComplete = typedText.length === textToType.length;
@@ -99,6 +98,19 @@ const TypingArea: React.FC<TypingAreaProps> = ({
   inputRef,
   handleInputChange,
 }) => {
+
+  // Function to prevent copy, cut, and paste
+  const preventClipboardActions = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    e.preventDefault();
+  };
+
+  // Function to prevent Backspace and Delete keys
+  const preventDeleteKeys = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Backspace' || e.key === 'Delete') {
+      e.preventDefault();
+    }
+  };
+
   return (
     <>
       {/* พื้นที่แสดงข้อความสำหรับพิมพ์ */}
@@ -115,12 +127,12 @@ const TypingArea: React.FC<TypingAreaProps> = ({
         onChange={handleInputChange}
         disabled={isFinished || isPaused}
         autoFocus
+        // เพิ่ม onCopy, onCut, onPaste เพื่อป้องกันการคัดลอกและวาง
+        onCopy={preventClipboardActions}
+        onCut={preventClipboardActions}
+        onPaste={preventClipboardActions}
       // เพิ่ม onKeyDown เพื่อป้องกัน Backspace/Delete key
-      // onKeyDown={(e) => {
-      //   if (e.key === 'Backspace' || e.key === 'Delete') {
-      //     e.preventDefault(); // ป้องกันการทำงานเริ่มต้นของ Backspace/Delete
-      //   }
-      // }}
+      // onKeyDown={preventDeleteKeys}
       />
     </>
   );

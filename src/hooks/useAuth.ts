@@ -56,18 +56,17 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
             setUser(currentUser);
             setIsAuthReady(true);
             console.log("Auth State Changed. User:", currentUser ? currentUser.uid : "null");
-
+            console.log(currentUser?.displayName)
             if (currentUser) {
                 // Reference to user profile in Realtime Database
                 const userRef = ref(realtimeDb, `artifacts/${appId}/users/${currentUser.uid}/profile`);
 
                 try {
                     const snapshot = await get(userRef);
+                    const safePhotoUrl = getSafePhotoUrl(currentUser.photoURL);
 
                     if (!snapshot.exists()) {
                         // New user - create profile with safe photo URL
-                        const safePhotoUrl = getSafePhotoUrl(currentUser.photoURL);
-
                         const profileData = {
                             uid: currentUser.uid,
                             displayName: currentUser.displayName,
@@ -84,47 +83,21 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
                         setUserPhotoUrl(safePhotoUrl);
                         console.log("New user profile created with safe photo URL");
                     } else {
-                        // Existing user - get data from database
+                        // Existing user - always update profile data on login
                         const userData = snapshot.val();
-                        setUserRole(userData.role || 'user');
+                        setUserRole(userData.role || 'user'); // Keep existing role if present
 
-                        // Check if we need to update photo URL (only if original URL changed)
-                        const lastPhotoUpdate = userData.lastPhotoUpdate || 0;
-                        const oneDayAgo = Date.now() - (24 * 60 * 60 * 1000); // 1 day in ms
-                        const originalPhotoChanged = userData.originalPhotoURL !== currentUser.photoURL;
+                        const updates: any = {
+                            displayName: currentUser.displayName,
+                            email: currentUser.email,
+                            photoURL: safePhotoUrl,
+                            originalPhotoURL: currentUser.photoURL,
+                            lastPhotoUpdate: Date.now()
+                        };
 
-                        if (userData.photoURL && !originalPhotoChanged && lastPhotoUpdate > oneDayAgo) {
-                            // Use cached photo URL if it's recent and original hasn't changed
-                            setUserPhotoUrl(userData.photoURL);
-                            console.log("Using cached photo URL from database");
-                        } else {
-                            // Update photo URL (either original changed or cache is old)
-                            const safePhotoUrl = getSafePhotoUrl(currentUser.photoURL);
-                            setUserPhotoUrl(safePhotoUrl);
-
-                            const photoUpdates: any = {
-                                photoURL: safePhotoUrl,
-                                originalPhotoURL: currentUser.photoURL,
-                                lastPhotoUpdate: Date.now()
-                            };
-
-                            await update(userRef, photoUpdates);
-                            console.log("Updated photo URL in database");
-                        }
-
-                        // Update other profile fields if they've changed
-                        const updates: any = {};
-                        if (userData.displayName !== currentUser.displayName) {
-                            updates.displayName = currentUser.displayName;
-                        }
-                        if (userData.email !== currentUser.email) {
-                            updates.email = currentUser.email;
-                        }
-
-                        if (Object.keys(updates).length > 0) {
-                            await update(userRef, updates);
-                            console.log("Updated user profile fields");
-                        }
+                        await update(userRef, updates); // Perform update every time
+                        setUserPhotoUrl(safePhotoUrl);
+                        console.log("Existing user profile updated on login.");
                     }
                 } catch (error) {
                     console.error("Error managing user profile in RealtimeDB:", error);
@@ -357,6 +330,9 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
         //     return true;
         // }
         // if (levelId === 'thai-practice-2-4-5') {
+        //     return true;
+        // }
+        // if (levelId === 'thai-practice-3-1-1') {
         //     return true;
         // }
 
