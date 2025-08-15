@@ -105,11 +105,11 @@ const TypingArea: React.FC<TypingAreaProps> = ({
   };
 
   // Function to prevent Backspace and Delete keys
-  const preventDeleteKeys = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Backspace' || e.key === 'Delete') {
-      e.preventDefault();
-    }
-  };
+  // const preventDeleteKeys = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  //   if (e.key === 'Backspace' || e.key === 'Delete') {
+  //     e.preventDefault();
+  //   }
+  // };
 
   return (
     <>

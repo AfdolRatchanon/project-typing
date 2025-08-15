@@ -1,7 +1,10 @@
 // src/components/AuthSection.tsx
+// This component handles user authentication UI, including login, logout,
+// user profile display, and toggling between the main game, admin dashboard,
+// and user dashboard.
 
 import React, { useState, useEffect } from 'react';
-import { LogIn, LogOut, User, LayoutDashboard, Gamepad2 } from 'lucide-react';
+import { LogIn, LogOut, User, LayoutDashboard, Gamepad2, BarChart2 } from 'lucide-react';
 
 interface AuthSectionProps {
     isAuthReady: boolean;
@@ -13,6 +16,9 @@ interface AuthSectionProps {
     // New props for admin toggle
     showAdminDashboard: boolean;
     setShowAdminDashboard: React.Dispatch<React.SetStateAction<boolean>>;
+    // New props for user dashboard toggle
+    showUserDashboard: boolean;
+    setShowUserDashboard: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 /**
@@ -29,6 +35,8 @@ const AuthSection: React.FC<AuthSectionProps> = ({
     handleSignOut,
     showAdminDashboard,
     setShowAdminDashboard,
+    showUserDashboard,
+    setShowUserDashboard,
 }) => {
     // State to track if the user's photo failed to load
     const [imageError, setImageError] = useState(false);
@@ -88,9 +96,27 @@ const AuthSection: React.FC<AuthSectionProps> = ({
             />
         );
     };
+    
+    // Toggle function for the User Dashboard
+    const toggleUserDashboard = () => {
+        setShowUserDashboard(prev => !prev);
+        // Ensure other dashboards are closed
+        if (!showUserDashboard) {
+            setShowAdminDashboard(false);
+        }
+    };
+    
+    // Toggle function for the Admin Dashboard
+    const toggleAdminDashboard = () => {
+        setShowAdminDashboard(prev => !prev);
+        // Ensure other dashboards are closed
+        if (!showAdminDashboard) {
+            setShowUserDashboard(false);
+        }
+    };
 
     return (
-        <div className="px-4 py-4 border-b border-gray-200 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+        <div className="p-4 border-b border-gray-200 bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
             {isAuthReady ? (
                 user ? (
                     <div className="max-w-4xl mx-auto">
@@ -114,7 +140,7 @@ const AuthSection: React.FC<AuthSectionProps> = ({
                             <div className="flex items-center justify-center gap-3">
                                 {userRole === 'admin' && (
                                     <button
-                                        onClick={() => setShowAdminDashboard(prev => !prev)}
+                                        onClick={toggleAdminDashboard}
                                         className="flex items-center gap-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium py-2 px-4 rounded-xl shadow-lg transition-all duration-200 ease-in-out hover:shadow-xl hover:scale-105 text-sm"
                                     >
                                         {showAdminDashboard ? (
@@ -128,6 +154,20 @@ const AuthSection: React.FC<AuthSectionProps> = ({
                                         )}
                                     </button>
                                 )}
+                                <button
+                                    onClick={toggleUserDashboard}
+                                    className="flex items-center gap-2 bg-gradient-to-r from-blue-500 to-teal-600 hover:from-blue-600 hover:to-teal-700 text-white font-medium py-2 px-4 rounded-xl shadow-lg transition-all duration-200 ease-in-out hover:shadow-xl hover:scale-105 text-sm"
+                                >
+                                    {showUserDashboard ? (
+                                        <>
+                                            <Gamepad2 size={16} /> หน้าเกม
+                                        </>
+                                    ) : (
+                                        <>
+                                            <BarChart2 size={16} /> สถิติของฉัน
+                                        </>
+                                    )}
+                                </button>
                                 <button
                                     onClick={() => setShowConfirmSignOut(true)}
                                     className="flex items-center gap-2 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-medium py-2 px-4 rounded-xl shadow-lg transition-all duration-200 ease-in-out hover:shadow-xl hover:scale-105 text-sm"
@@ -158,7 +198,7 @@ const AuthSection: React.FC<AuthSectionProps> = ({
                                 <div className="flex items-center gap-2">
                                     {userRole === 'admin' && (
                                         <button
-                                            onClick={() => setShowAdminDashboard(prev => !prev)}
+                                            onClick={toggleAdminDashboard}
                                             className="flex items-center gap-1.5 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white font-medium py-1.5 px-3 rounded-lg shadow-lg transition-all duration-200 ease-in-out hover:shadow-xl text-xs"
                                         >
                                             {showAdminDashboard ? (
@@ -172,6 +212,20 @@ const AuthSection: React.FC<AuthSectionProps> = ({
                                             )}
                                         </button>
                                     )}
+                                    <button
+                                        onClick={toggleUserDashboard}
+                                        className="flex items-center gap-1.5 bg-gradient-to-r from-blue-500 to-teal-600 hover:from-blue-600 hover:to-teal-700 text-white font-medium py-1.5 px-3 rounded-lg shadow-lg transition-all duration-200 ease-in-out hover:shadow-xl text-xs"
+                                    >
+                                        {showUserDashboard ? (
+                                            <>
+                                                <Gamepad2 size={14} /> เกม
+                                            </>
+                                        ) : (
+                                            <>
+                                                <BarChart2 size={14} /> สถิติ
+                                            </>
+                                        )}
+                                    </button>
                                     <button
                                         onClick={() => setShowConfirmSignOut(true)}
                                         className="flex items-center gap-1.5 bg-gradient-to-r from-rose-500 to-pink-600 hover:from-rose-600 hover:to-pink-700 text-white font-medium py-1.5 px-3 rounded-lg shadow-lg transition-all duration-200 ease-in-out hover:shadow-xl text-xs"
