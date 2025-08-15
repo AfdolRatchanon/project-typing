@@ -1,11 +1,22 @@
 # โปรแกรมฝึกพิมพ์ดีด
 พัฒนาเองใช้เองเพื่อให้ยืดหยุนในการใช้งานสามารถกำหนดเนื้อหรือเกณฑ์การให้คะแนนได้เอง
 ### การนำไปใช้งาน
-1. ดาวน์โหลด Source code และใช้คำสั่ง
+1. สร้างโปรเจ็คที่ firebase และใช้ Service ดังนี้
+   1. Hosting
+   2. RealtimeDB
+   3. Authentication 
+2. ดาวน์โหลด Source code และใช้คำสั่ง
 ```
 npm install
 ```
-2. รันโปรแกรมด้วยคำสั่ง
+3. ตั้งค่าในไฟล์ firebaseConfig.ts ผ่านยังตัวแปร `firebaseConfig` โดยเน้นในส่วน 4 ส่วนนี้
+```
+  apiKey: "YOUR_API_KEY",,
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  databaseURL: "YOUR_DATABASE_URL",
+```
+4. รันโปรแกรมด้วยคำสั่ง
 ```
 npm run dev
 ```
