@@ -3,8 +3,36 @@
 ### การนำไปใช้งาน
 1. สร้างโปรเจ็คที่ firebase และใช้ Service ดังนี้
    1. Hosting
-   2. RealtimeDB
-   3. Authentication 
+   2. RealtimeDB มีการกำหนด Rules ดังนี้
+```
+{
+  "rules": {
+    "artifacts": {
+      "$appId": {
+        "users": {
+          // Rule นี้อนุญาตให้ผู้ดูแลระบบ (Admin) สามารถอ่านข้อมูลของผู้ใช้ทั้งหมดได้
+          ".read": "auth != null && root.child('artifacts').child($appId).child('users').child(auth.uid).child('profile/role').val() == 'admin'",
+          
+          "$userId": {
+            // Rule นี้อนุญาตให้ผู้ใช้แต่ละคนสามารถอ่านข้อมูลของตัวเองได้
+            ".read": "auth != null && auth.uid == $userId",
+            
+            // Rule นี้อนุญาตให้ผู้ใช้สามารถเขียนข้อมูลได้เฉพาะในส่วนของตัวเองเท่านั้น
+            ".write": "auth != null && auth.uid == $userId"
+          }
+        },
+        "public": {
+          "data": {
+            ".read": true,
+            ".write": "auth != null"
+          }
+        }
+      }
+    }
+  }
+}          
+```
+   3. Authentication ใช้ provider เป็น Google 
 2. ดาวน์โหลด Source code และใช้คำสั่ง
 ```
 npm install
@@ -23,7 +51,7 @@ npm run dev
 ### หาจะ Deploy ขึ้น Server ให้ใช้คำสั่งดังนี้
 1. bulid โปรเจ็ค ด้วยคำสั่ง
 ```
-npum run build
+npm run build
 ```
 2. นำไฟล์ dist ไป Deploy ขึ้น Server
 ### การแก้ไขเนื้อหาโปรแกรมพิมพ์ดีด
