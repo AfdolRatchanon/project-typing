@@ -353,6 +353,20 @@ const App: React.FC = () => {
                         </div>
                     </div>
                 )}
+                <footer className="w-full flex justify-center items-center py-4 text-sm text-gray-600 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl lg:rounded-2xl shadow-inner mt-4 border border-gray-200">
+                    <div className="flex items-center space-x-2">
+                        <div className="flex items-center space-x-1">
+                            <span className="text-blue-600 font-semibold">©</span>
+                            <span className="font-medium">2025</span>
+                        </div>
+                        <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                        <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">
+                            Ratchanon Semsayan
+                        </span>
+                        <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
+                        <span className="text-gray-500">All Rights Reserved</span>
+                    </div>
+                </footer>
             </main>
         </div>
     );

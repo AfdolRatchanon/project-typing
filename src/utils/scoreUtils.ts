@@ -52,7 +52,7 @@ export const calculateAccuracy = (correctChars: number, totalChars: number): num
  * @returns {ScoringCriteria[]} - อาร์เรย์ของเกณฑ์การให้คะแนน
  */
 export const getDefaultCriteria = (currentLevelId: string): ScoringCriteria[] => {
-    let currentLevelTimeLimit: number | null = null;
+    let currentLevelTimeLimit: number | null | undefined = null;
     for (const language of languages) {
         for (const unit of language.units) {
             for (const session of unit.sessions) {
@@ -84,17 +84,17 @@ export const getDefaultCriteria = (currentLevelId: string): ScoringCriteria[] =>
 
     // ถ้ามีเวลาจำกัด ใช้เกณฑ์ตาม WPM
     return [
-        { minWPM: 20, maxErrors: 0, score10Point: 10, grade: 'ดีเยี่ยม' },
-        { minWPM: 18, maxErrors: 0, score10Point: 9, grade: 'ดีมาก' },
-        { minWPM: 16, maxErrors: 0, score10Point: 8, grade: 'ดี' },
-        { minWPM: 14, maxErrors: 0, score10Point: 7, grade: 'พอใช้' },
-        { minWPM: 12, maxErrors: 0, score10Point: 6, grade: 'ต้องฝึกเพิ่ม' },
-        { minWPM: 10, maxErrors: 0, score10Point: 5, grade: 'ต้องฝึกเพิ่ม' },
-        { minWPM: 8, maxErrors: 0, score10Point: 4, grade: 'ต้องฝึกเพิ่ม' },
-        { minWPM: 6, maxErrors: 0, score10Point: 3, grade: 'ต้องฝึกเพิ่ม' },
-        { minWPM: 4, maxErrors: 0, score10Point: 2, grade: 'ต้องฝึกเพิ่ม' },
-        { minWPM: 2, maxErrors: 0, score10Point: 1, grade: 'ต้องฝึกเพิ่ม' },
-        { minWPM: 0, maxErrors: 0, score10Point: 0, grade: 'ไม่ผ่าน' },
+        { minWPM: 20, maxErrors: Infinity, score10Point: 10, grade: 'ดีเยี่ยม' },
+        { minWPM: 18, maxErrors: Infinity, score10Point: 9, grade: 'ดีมาก' },
+        { minWPM: 16, maxErrors: Infinity, score10Point: 8, grade: 'ดี' },
+        { minWPM: 14, maxErrors: Infinity, score10Point: 7, grade: 'พอใช้' },
+        { minWPM: 12, maxErrors: Infinity, score10Point: 6, grade: 'ต้องฝึกเพิ่ม' },
+        { minWPM: 10, maxErrors: Infinity, score10Point: 5, grade: 'ต้องฝึกเพิ่ม' },
+        { minWPM: 8, maxErrors: Infinity, score10Point: 4, grade: 'ต้องฝึกเพิ่ม' },
+        { minWPM: 6, maxErrors: Infinity, score10Point: 3, grade: 'ต้องฝึกเพิ่ม' },
+        { minWPM: 4, maxErrors: Infinity, score10Point: 2, grade: 'ต้องฝึกเพิ่ม' },
+        { minWPM: 2, maxErrors: Infinity, score10Point: 1, grade: 'ต้องฝึกเพิ่ม' },
+        { minWPM: 0, maxErrors: Infinity, score10Point: 0, grade: 'ไม่ผ่าน' },
     ];
 };
 

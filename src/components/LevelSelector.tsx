@@ -55,8 +55,8 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
         }
 
         const currentLevelStats = userLevelProgress[currentLevelId];
-        const requiredPlayCount = 3;
-        const requiredScore = 5;
+        const requiredPlayCount = 1;
+        const requiredScore = 0;
 
         // ตรวจสอบว่าด่านปัจจุบัน "ผ่าน" หรือไม่
         const isCurrentLevelPassed =
@@ -142,8 +142,8 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                                 <button
                                     onClick={() => setExpandedLanguage(expandedLanguage === language.id ? '' : language.id)}
                                     className={`w-full flex items-center justify-between p-3.5 transition-all duration-300 ${isLanguageActive
-                                            ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500'
-                                            : 'bg-gray-50/80 hover:bg-gray-100/80'
+                                        ? 'bg-gradient-to-r from-blue-50 to-purple-50 border-l-4 border-l-blue-500'
+                                        : 'bg-gray-50/80 hover:bg-gray-100/80'
                                         }`}
                                 >
                                     <span className={`font-bold text-base ${isLanguageActive ? 'text-blue-700' : 'text-gray-800'
@@ -177,8 +177,8 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                                                         <button
                                                             onClick={() => toggleUnit(unit.id)}
                                                             className={`w-full flex items-center justify-between p-3 transition-all duration-300 ${isUnitActive
-                                                                    ? 'bg-gradient-to-r from-blue-25 to-blue-50 border-l-3 border-l-blue-400'
-                                                                    : 'bg-gray-25/80 hover:bg-gray-50/80'
+                                                                ? 'bg-gradient-to-r from-blue-25 to-blue-50 border-l-3 border-l-blue-400'
+                                                                : 'bg-gray-25/80 hover:bg-gray-50/80'
                                                                 }`}
                                                         >
                                                             <span className={`font-semibold text-sm ${isUnitActive ? 'text-blue-700' : 'text-gray-700'
@@ -210,8 +210,8 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                                                                                 <button
                                                                                     onClick={() => toggleSession(session.id)}
                                                                                     className={`w-full flex items-center justify-between p-2.5 transition-all duration-300 ${isSessionActive
-                                                                                            ? 'bg-gradient-to-r from-blue-25 to-indigo-25 border-l-2 border-l-blue-300'
-                                                                                            : 'bg-gray-25/60 hover:bg-gray-50/60'
+                                                                                        ? 'bg-gradient-to-r from-blue-25 to-indigo-25 border-l-2 border-l-blue-300'
+                                                                                        : 'bg-gray-25/60 hover:bg-gray-50/60'
                                                                                         }`}
                                                                                 >
                                                                                     <span className={`font-medium text-sm ${isSessionActive ? 'text-blue-600' : 'text-gray-600'
@@ -238,8 +238,8 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                                                                                             {session.levels.map((level) => {
                                                                                                 const unlocked = isLevelUnlocked(level.id);
                                                                                                 const playCountForLevel = userLevelProgress[level.id]?.playCount || 0;
-                                                                                                const requiredPlayCount = 3;
-                                                                                                const requiredScore = 5;
+                                                                                                const requiredPlayCount = 1;
+                                                                                                const requiredScore = 0;
                                                                                                 const isFirstLevel = level.id === 'thai-practice-1-1-1';
 
                                                                                                 let tooltipText = '';
@@ -268,8 +268,8 @@ const LevelSelector: React.FC<LevelSelectorProps> = ({
                                                                                                         }}
                                                                                                         disabled={!unlocked || (isStarted && !isPaused)}
                                                                                                         className={`w-full text-left p-2.5 rounded-lg border transition-all duration-300 ease-in-out text-sm font-medium relative group ${currentLevelId === level.id
-                                                                                                                ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-[1.01] ring-2 ring-blue-200/50'
-                                                                                                                : 'bg-white/80 text-gray-600 border-gray-200/60 hover:bg-blue-50/80 hover:border-blue-300/60 hover:shadow-md hover:transform hover:scale-[1.005]'
+                                                                                                            ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white border-blue-600 shadow-lg transform scale-[1.01] ring-2 ring-blue-200/50'
+                                                                                                            : 'bg-white/80 text-gray-600 border-gray-200/60 hover:bg-blue-50/80 hover:border-blue-300/60 hover:shadow-md hover:transform hover:scale-[1.005]'
                                                                                                             } ${(!unlocked || (isStarted && !isPaused)) ? 'opacity-50 cursor-not-allowed' : ''
                                                                                                             }`}
                                                                                                         title={!unlocked ? tooltipText : ''}

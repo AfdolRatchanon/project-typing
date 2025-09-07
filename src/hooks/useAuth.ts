@@ -366,8 +366,8 @@ export const useAuth = (appId: string, currentLevelId: string): AuthState => {
         const previousLevelPlayCount = previousLevelStats?.playCount || 0;
         const previousLevelScore = previousLevelStats?.score10Point || 0;
 
-        const requiredPlayCount = 3;
-        const requiredScore = 5;
+        const requiredPlayCount = 1;
+        const requiredScore = 0;
 
         return previousLevelPlayCount >= requiredPlayCount && previousLevelScore > requiredScore;
     }, [user, userLevelProgress, languages]);
