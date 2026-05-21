@@ -1,0 +1,171 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===== Helper Functions =====
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && getUserRole() == 'superAdmin';
+    }
+
+    function isTeacherOrAdmin() {
+      return isAuthenticated() && (getUserRole() == 'teacher' || getUserRole() == 'superAdmin');
+    }
+
+    function isClassroomOwner(classroomId) {
+      return isAuthenticated() &&
+        get(/databases/$(database)/documents/classrooms/$(classroomId)).data.teacherUid == request.auth.uid;
+    }
+
+    function isClassroomMember(classroomId) {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/classrooms/$(classroomId)/members/$(request.auth.uid));
+    }
+
+    // ===== users/{uid} =====
+    match /users/{uid} {
+      // อ่าน: ตัวเอง หรือ ครู/admin (ครูต้องดูสมาชิกในห้อง)
+      allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+
+      // สร้าง: ตัวเอง (first-login profile creation ใน useAuth.ts)
+      allow create: if request.auth.uid == uid;
+
+      // อัปเดต:
+      //   - ตัวเอง (แก้ชื่อ/รูป) แต่ห้ามเปลี่ยน role เอง
+      //   - superAdmin เปลี่ยนได้ทุกอย่าง
+      //   - ครู/admin แก้ได้เฉพาะ classroomIds (CSV import / kick)
+      allow update: if (request.auth.uid == uid &&
+                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+                    || isSuperAdmin()
+                    || (isTeacherOrAdmin() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['classroomIds']));
+
+      allow delete: if isSuperAdmin();
+
+      // stats subcollection — สถิติการพิมพ์แต่ละ level
+      match /stats/{levelId} {
+        allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+        allow write: if request.auth.uid == uid;
+      }
+
+      // classroomStats subcollection — สถิติบทเรียนห้องเรียน
+      match /classroomStats/{docId} {
+        allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+        allow write: if request.auth.uid == uid;
+      }
+    }
+
+    // ===== classrooms/{classroomId} =====
+    match /classrooms/{classroomId} {
+      // อ่าน: ทุก auth user — จำเป็นสำหรับ join flow
+      // (นักเรียนต้องอ่าน classroom ก่อนจะเป็นสมาชิก เพื่อ verify join code)
+      allow read: if isAuthenticated();
+
+      // สร้าง: ครู หรือ admin
+      allow create: if isTeacherOrAdmin();
+
+      // แก้ไข/ลบ: เจ้าของห้อง หรือ superAdmin
+      allow update, delete: if isClassroomOwner(classroomId) || isSuperAdmin();
+
+      // members subcollection
+      match /members/{memberId} {
+        // อ่าน: เจ้าของห้อง, admin, หรือตัวสมาชิกเอง (check ก่อน join ซ้ำ)
+        allow read: if isClassroomOwner(classroomId) || isSuperAdmin() || request.auth.uid == memberId;
+
+        // สร้าง: self-join (นักเรียนเพิ่มตัวเองเข้าห้อง) หรือ เจ้าของ/admin (CSV import)
+        allow create: if request.auth.uid == memberId || isClassroomOwner(classroomId) || isSuperAdmin();
+
+        // แก้ไข: เจ้าของห้อง หรือ admin (แก้ข้อมูลสมาชิก เช่น studentNumber)
+        allow update: if isClassroomOwner(classroomId) || isSuperAdmin();
+
+        // ลบ: ตัวเอง (leave) หรือ เจ้าของห้อง (kick) หรือ admin
+        allow delete: if request.auth.uid == memberId || isClassroomOwner(classroomId) || isSuperAdmin();
+      }
+
+      // lessons subcollection — บทเรียนที่ครูสร้าง
+      match /lessons/{lessonId} {
+        // อ่าน: สมาชิกห้อง, เจ้าของ, admin
+        allow read: if isClassroomMember(classroomId) || isClassroomOwner(classroomId) || isSuperAdmin();
+
+        // เขียน: เจ้าของห้อง หรือ admin เท่านั้น
+        allow write: if isClassroomOwner(classroomId) || isSuperAdmin();
+      }
+    }
+
+    // ===== prePostTests/{testId} =====
+    match /prePostTests/{testId} {
+      // อ่าน: ทุก auth user — นักเรียนต้องดูการทดสอบที่เปิดอยู่
+      allow read: if isAuthenticated();
+
+      // สร้าง: ครู/admin เท่านั้น
+      allow create: if isTeacherOrAdmin();
+
+      // แก้ไข/ลบ: ผู้สร้างการทดสอบ หรือ superAdmin
+      allow update, delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || isSuperAdmin()
+      );
+
+      // results subcollection — ผลการสอบของนักเรียน
+      match /results/{uid} {
+        // อ่าน: ตัวเอง, ครู/admin (เพื่อดู dashboard)
+        allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+
+        // เขียน: นักเรียนส่งผลตัวเอง
+        allow write: if request.auth.uid == uid;
+      }
+    }
+
+    // ===== exams/{examId} =====
+    match /exams/{examId} {
+      allow read: if isAuthenticated();
+      allow create: if isTeacherOrAdmin();
+      allow update, delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || isSuperAdmin()
+      );
+      match /results/{uid} {
+        allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+        allow write: if request.auth.uid == uid;
+      }
+    }
+
+    // ===== surveys/{surveyId} =====
+    match /surveys/{surveyId} {
+      // อ่าน: ทุก auth user — นักเรียนต้องดูแบบสอบถามที่เปิดอยู่
+      allow read: if isAuthenticated();
+
+      // สร้าง: ครู/admin เท่านั้น
+      allow create: if isTeacherOrAdmin();
+
+      // แก้ไข/ลบ: ผู้สร้าง หรือ superAdmin
+      allow update, delete: if isAuthenticated() && (
+        resource.data.createdBy == request.auth.uid || isSuperAdmin()
+      );
+
+      // responses subcollection — คำตอบของนักเรียน
+      match /responses/{uid} {
+        // อ่าน: ตัวเอง, ครู/admin
+        allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+
+        // เขียน: นักเรียนส่งคำตอบตัวเอง
+        allow write: if request.auth.uid == uid;
+      }
+    }
+
+    // ===== joinCodes/{code} =====
+    match /joinCodes/{code} {
+      // อ่าน: ทุก auth user (นักเรียนใช้เพื่อ join ห้อง)
+      allow read: if isAuthenticated();
+
+      // เขียน: ครู หรือ admin (สร้าง/ลบรหัสห้อง)
+      allow write: if isTeacherOrAdmin();
+    }
+  }
+}

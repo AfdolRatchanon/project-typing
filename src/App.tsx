@@ -1,375 +1,225 @@
-// App.tsx
-// This file serves as the main entry point for the React application.
-// It orchestrates the entire application flow, managing state,
-// handling routing between different components (game, admin dashboard, user dashboard),
-// and integrating custom hooks for authentication and game logic.
-
-// Declare global variables by extending the Window interface
-// This makes them accessible via window.__app_id and window.__initial_auth_token
-// and helps TypeScript recognize them correctly during build.
-declare global {
-    interface Window {
-        __app_id?: string;
-        __initial_auth_token?: string;
-    }
-}
-
 import React, { useState, useEffect } from 'react';
-import { Target } from 'lucide-react';
-import './App.css'; // Assuming App.css contains global styles
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import './App.css';
 
-// Import components
-import AuthSection from './components/AuthSection';
-import LevelSelector from './components/LevelSelector';
-import StatsDisplay from './components/StatsDisplay';
-import TypingArea from './components/TypingArea';
-import GameControls from './components/GameControls';
-import VirtualKeyboard from './components/VirtualKeyboard';
-import NextCharGuidance from './components/NextCharGuidance';
-import GameResults from './components/GameResults';
-import LevelScoringCriteria from './components/LevelScoringCriteria';
-import AdminDashboard from './components/AdminDashboard';
-import UserDashboard from './components/UserDashboard'; // IMPORT USERDASHBOARD
+import LandingPage from './pages/LandingPage';
+import PracticePage from './pages/PracticePage';
+import CompleteProfilePage from './pages/CompleteProfilePage';
+import TeacherPage from './pages/TeacherPage';
+import StudentClassroomPage from './pages/StudentClassroomPage';
+import ClassroomPracticePage from './pages/ClassroomPracticePage';
+import PrePostTestRoom from './pages/PrePostTestRoom';
+import ExamRoom from './pages/ExamRoom';
+import SurveyPage from './pages/SurveyPage';
+import ProfilePage from './pages/ProfilePage';
+import UserDashboard from './components/dashboard/UserDashboard';
+import AdminDashboard from './components/dashboard/AdminDashboard';
+import TeacherDashboard from './components/dashboard/TeacherDashboard';
+import ProtectedRoute from './components/shared/ProtectedRoute';
+import ThemeSwitch from './components/shared/ThemeSwitch';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 
-// Import hooks
 import { useAuth } from './hooks/useAuth';
-import { useTypingGame } from './hooks/useTypingGame';
-
-// Import data
 import { languages } from './data/data';
 
-const App: React.FC = () => {
-    // Get appId safely from window object
-    const appId = (window as any).__app_id || 'default-app-id';
+// currentLevelId ต้องมีค่าเริ่มต้นสำหรับ useAuth
+const defaultLevelId = languages[0].units[0].sessions[0].levels[0].id;
 
-    // State for current level selection (managed here as it affects both auth and game logic)
-    const [currentLevelId, setCurrentLevelId] = useState<string>(languages[0].units[0].sessions[0].levels[0].id);
+const AppRoutes: React.FC = () => {
+    const navigate = useNavigate();
+    const [isGuestMode, setIsGuestMode] = useState(false);
 
-    // Add states for LevelSelector expansion
-    const [expandedLanguage, setExpandedLanguage] = useState<string>('');
-    const [expandedUnits, setExpandedUnits] = useState<{ [key: string]: boolean }>({});
-    const [expandedSessions, setExpandedSessions] = useState<{ [key: string]: boolean }>({});
-
-    // Auth Hook
     const {
-        user,
-        isAuthReady,
-        userPhotoUrl,
-        userRole, // Get userRole from useAuth
-        latestUserStats,
-        userLevelProgress,
-        isUserProgressLoaded,
-        handleGoogleSignIn,
-        handleSignOut,
-        isLevelUnlocked,
-    } = useAuth(appId, currentLevelId);
+        user, isAuthReady, userPhotoUrl, userRole, userProfile,
+        latestUserStats, userLevelProgress, isUserProgressLoaded,
+        handleGoogleSignIn, handleSignOut, isLevelUnlocked,
+    } = useAuth(defaultLevelId);
 
-    // Typing Game Hook
-    const {
-        fullTextContent,
-        segments,
-        currentSegmentIndex,
-        textToType,
-        typedText,
-        isStarted,
-        isPaused,
-        isFinished,
-        timer,
-        totalErrors,
-        totalCorrectChars,
-        totalTypedChars,
-        wpm,
-        accuracy,
-        timeLimit,
-        remainingTime,
-        isTimeUp,
-        nextChar,
-        activeFinger,
-        highlightedKeys,
-        keyboardLanguage,
-        isShiftActive,
-        isCapsLockActive,
-        inputRef,
-        handleInputChange,
-        handleStartPause,
-        handleResetGame,
-        getCurrentLevel,
-    } = useTypingGame({ currentLevelId, user, appId });
-
-    const currentLevel = getCurrentLevel();
-
-    // useEffect to automatically expand LevelSelector sections
+    // เมื่อ login สำเร็จ ออกจาก guest mode
     useEffect(() => {
-        if (!currentLevel) {
-            // If currentLevel is null, maybe collapse everything or set a default
-            setExpandedLanguage('');
-            setExpandedUnits({});
-            setExpandedSessions({});
-            return;
-        }
+        if (user && isGuestMode) setIsGuestMode(false);
+    }, [user]);
 
-        let foundLangId: string = '';
-        const newExpandedUnits: { [key: string]: boolean } = {};
-        const newExpandedSessions: { [key: string]: boolean } = {};
+    const handleGuestStart = () => {
+        setIsGuestMode(true);
+        navigate('/practice');
+    };
 
-        // Loop through languages, units, and sessions to find the current level
-        // and set the expanded states accordingly.
-        for (const lang of languages) {
-            let isLangActive = false;
-            for (const unit of lang.units) {
-                let isUnitActive = false;
-                for (const session of unit.sessions) {
-                    // Check if the current level is in this session
-                    const isSessionActive = session.levels.some(level => level.id === currentLevelId);
-                    if (isSessionActive) {
-                        newExpandedSessions[session.id] = true;
-                        isUnitActive = true; // Mark unit as active
-                        isLangActive = true; // Mark language as active
-                    } else {
-                        newExpandedSessions[session.id] = false; // Explicitly collapse if not active
-                    }
-                }
-                if (isUnitActive) {
-                    newExpandedUnits[unit.id] = true;
-                } else {
-                    newExpandedUnits[unit.id] = false; // Explicitly collapse if not active
-                }
-            }
-            if (isLangActive) {
-                foundLangId = lang.id;
-            }
-        }
+    const handleSignIn = async () => {
+        await handleGoogleSignIn();
+    };
 
-        // Update the states after determining all expanded states
-        setExpandedLanguage(foundLangId);
-        setExpandedUnits(newExpandedUnits);
-        setExpandedSessions(newExpandedSessions);
+    // auth props ที่ส่งไปยัง PracticePage
+    const authProps = {
+        user, isAuthReady, userPhotoUrl, userRole, isGuestMode,
+        latestUserStats, userLevelProgress, isUserProgressLoaded,
+        handleGoogleSignIn, handleSignOut, isLevelUnlocked,
+    };
 
-        console.log(`Auto-expanding: Language=${foundLangId}`);
-        console.log('New Expanded Units State:', newExpandedUnits);
-        console.log('New Expanded Sessions State:', newExpandedSessions);
-
-    }, [currentLevelId, languages, currentLevel]);
-
-
-    // Calculate progress for display
-    let completedCharsReal = 0;
-    for (let i = 0; i < currentSegmentIndex; i++) {
-        completedCharsReal += segments[i].length + 1;
-    }
-    const totalProgress = completedCharsReal + typedText.length;
-    const totalCharsActual = fullTextContent.length;
-
-    // New state to manage admin view toggle and user dashboard
-    const [showAdminDashboard, setShowAdminDashboard] = useState(false);
-    const [showUserDashboard, setShowUserDashboard] = useState(false);
-
-    // Conditional rendering based on which dashboard is active
-    if (showAdminDashboard) {
-        return (
-            <AdminDashboard
-                user={user}
-                userRole={userRole}
-                setShowAdminDashboard={setShowAdminDashboard}
-            />
-        );
-    }
-
-    // NEW CONDITIONAL RENDERING FOR USER DASHBOARD
-    if (showUserDashboard) {
-        return (
-            <UserDashboard
-                user={user}
-                setShowUserDashboard={setShowUserDashboard}
-            />
-        );
-    }
-
-    // Main game application UI
     return (
-        <div className="min-h-screen bg-gradient-to-br from-blue-100 to-purple-100 flex flex-col xl:flex-row p-2 sm:p-4 font-inter gap-3 lg:gap-6 w-full">
-            {/* ======================= เมนูเลือกบทเรียน (ซ้าย) ======================= */}
-            <aside className="bg-white rounded-xl lg:rounded-2xl shadow-2xl w-full xl:w-80 2xl:w-96 border border-gray-200 h-150 sm:h-200 lg:h-500 lg:max-h-[90vh] flex flex-col">
-                <div className="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-3 sm:p-4 lg:p-5 rounded-t-xl lg:rounded-t-2xl shadow-lg">
-                    <h2 className="text-base sm:text-lg lg:text-xl font-bold text-center flex items-center justify-center gap-2">
-                        <Target size={16} className="sm:w-5 sm:h-5" />
-                        เลือกบทเรียน
-                    </h2>
-                </div>
+        <Routes>
+            {/* Landing */}
+            <Route
+                path="/"
+                element={
+                    !isAuthReady ? null :
+                    (user || isGuestMode)
+                        ? <Navigate to="/practice" replace />
+                        : <LandingPage
+                            onGuestStart={handleGuestStart}
+                            onSignIn={handleSignIn}
+                            isAuthReady={isAuthReady}
+                          />
+                }
+            />
 
-                {/* Firebase Login/User Info Section */}
-                <AuthSection
-                    isAuthReady={isAuthReady}
-                    user={user}
-                    userPhotoUrl={userPhotoUrl}
-                    userRole={userRole}
-                    handleGoogleSignIn={handleGoogleSignIn}
-                    handleSignOut={handleSignOut}
-                    showAdminDashboard={showAdminDashboard} // Pass state
-                    setShowAdminDashboard={setShowAdminDashboard} // Pass setter
-                    showUserDashboard={showUserDashboard} // Pass state
-                    setShowUserDashboard={setShowUserDashboard} // Pass setter
-                />
+            {/* Complete Profile — บังคับกรอกครั้งแรก */}
+            <Route
+                path="/complete-profile"
+                element={
+                    <ProtectedRoute
+                        isAuthReady={isAuthReady}
+                        user={user}
+                        userRole={userRole}
+                        skipProfileCheck
+                    >
+                        <CompleteProfilePage user={user} userRole={userRole} />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Level Selector */}
-                <LevelSelector
-                    languages={languages}
-                    currentLevelId={currentLevelId}
-                    setCurrentLevelId={setCurrentLevelId}
-                    isStarted={isStarted}
-                    isPaused={isPaused}
-                    expandedLanguage={expandedLanguage}
-                    setExpandedLanguage={setExpandedLanguage}
-                    expandedUnits={expandedUnits}
-                    setExpandedUnits={setExpandedUnits}
-                    expandedSessions={expandedSessions}
-                    setExpandedSessions={setExpandedSessions}
-                    isLevelUnlocked={isLevelUnlocked}
-                    userLevelProgress={userLevelProgress}
-                    isUserProgressLoaded={isUserProgressLoaded}
-                    user={user}
-                />
+            {/* Practice */}
+            <Route
+                path="/practice"
+                element={
+                    <ProtectedRoute
+                        isAuthReady={isAuthReady}
+                        user={user}
+                        userRole={userRole}
+                        userProfile={userProfile}
+                        allowGuest
+                        isGuestMode={isGuestMode}
+                    >
+                        <PracticePage {...authProps} />
+                    </ProtectedRoute>
+                }
+            />
 
-                <div className="border-t border-gray-200 p-2 sm:p-3 lg:p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-b-xl lg:rounded-b-2xl">
-                    <div className="text-xs text-gray-600 text-center">
-                        <div className="flex items-center justify-center gap-1.5 sm:gap-2 mb-1 sm:mb-2">
-                            <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse"></div>
-                            <span className="font-semibold text-gray-700 text-xs sm:text-sm">กำลังเรียน:</span>
-                        </div>
-                        <div className="font-bold text-blue-700 truncate px-2 py-1 bg-white rounded-md shadow-sm border text-xs sm:text-sm">
-                            {currentLevel?.name || 'กำลังโหลด...'}
-                        </div>
-                    </div>
-                </div>
-            </aside>
+            {/* Student Dashboard */}
+            <Route
+                path="/dashboard"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                        <UserDashboard user={user} setShowUserDashboard={() => navigate('/practice')} />
+                    </ProtectedRoute>
+                }
+            />
 
-            {/* ======================= ส่วนเนื้อหาหลัก (ขวา) ======================= */}
-            <main className="bg-white p-4 lg:p-8 rounded-xl lg:rounded-2xl shadow-2xl flex-1 border border-gray-200 min-h-0">
-                {/* Stats Display */}
-                <StatsDisplay
-                    timer={timer}
-                    timeLimit={timeLimit}
-                    remainingTime={remainingTime}
-                    wpm={wpm}
-                    accuracy={accuracy}
-                    totalErrors={totalErrors}
-                    totalProgress={totalProgress}
-                    totalCharsActual={totalCharsActual}
-                />
+            {/* Admin / Teacher Dashboard */}
+            <Route
+                path="/admin"
+                element={
+                    <ProtectedRoute
+                        isAuthReady={isAuthReady}
+                        user={user}
+                        userRole={userRole}
+                        userProfile={userProfile}
+                        allowedRoles={['teacher', 'superAdmin']}
+                    >
+                        {userRole === 'superAdmin'
+                            ? <AdminDashboard user={user} userRole={userRole} setShowAdminDashboard={() => navigate('/practice')} />
+                            : <TeacherDashboard user={user} setShowTeacherDashboard={() => navigate('/practice')} />
+                        }
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Typing Area */}
-                <TypingArea
-                    textToType={textToType}
-                    typedText={typedText}
-                    currentSegmentIndex={currentSegmentIndex}
-                    segments={segments}
-                    isFinished={isFinished}
-                    isPaused={isPaused}
-                    inputRef={inputRef}
-                    handleInputChange={handleInputChange}
-                />
+            {/* Teacher classroom management */}
+            <Route
+                path="/teacher"
+                element={
+                    <ProtectedRoute
+                        isAuthReady={isAuthReady}
+                        user={user}
+                        userRole={userRole}
+                        userProfile={userProfile}
+                        allowedRoles={['teacher', 'superAdmin']}
+                    >
+                        <TeacherPage user={user} userRole={userRole} />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Game Controls */}
-                <GameControls
-                    isStarted={isStarted}
-                    isPaused={isPaused}
-                    isFinished={isFinished}
-                    handleStartPause={handleStartPause}
-                    handleResetGame={handleResetGame}
-                />
+            {/* Student — my classrooms */}
+            <Route
+                path="/my-classroom"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                        <StudentClassroomPage user={user} />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Virtual Keyboard and Next Char Guidance */}
-                <div className="flex flex-col-reverse lg:flex-row gap-3 lg:gap-4">
-                    <VirtualKeyboard
-                        highlightedKeys={highlightedKeys}
-                        isShiftActive={isShiftActive}
-                        isCapsLockActive={isCapsLockActive}
-                        keyboardLanguage={keyboardLanguage}
-                    />
-                    <NextCharGuidance
-                        nextChar={nextChar}
-                        activeFinger={activeFinger}
-                        typedTextLength={typedText.length}
-                        textToTypeLength={textToType.length}
-                        currentSegmentIndex={currentSegmentIndex}
-                        segmentsLength={segments.length}
-                        isFinished={isFinished}
-                        isPaused={isPaused}
-                    />
-                </div>
+            {/* Classroom custom lesson practice */}
+            <Route
+                path="/classroom/:classroomId/lesson/:lessonId"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                        <ClassroomPracticePage user={user} />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Game Results */}
-                <GameResults
-                    isFinished={isFinished}
-                    isTimeUp={isTimeUp}
-                    timer={timer}
-                    wpm={wpm}
-                    accuracy={accuracy}
-                    totalErrors={totalErrors}
-                    totalCorrectChars={totalCorrectChars}
-                    totalTypedChars={totalTypedChars}
-                    fullTextContentLength={fullTextContent.length}
-                    currentLevelId={currentLevelId}
-                    user={user}
-                    latestUserStats={latestUserStats}
-                />
+            {/* Pre/Post Test exam room */}
+            <Route
+                path="/test/:testId"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                        <PrePostTestRoom user={user} />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* Level Scoring Criteria */}
-                <LevelScoringCriteria
-                    currentLevelId={currentLevelId}
-                    timeLimit={timeLimit}
-                    currentLevelName={currentLevel?.name || null}
-                />
+            {/* Exam room */}
+            <Route
+                path="/exam/:examId"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                        <ExamRoom user={user} />
+                    </ProtectedRoute>
+                }
+            />
 
-                {/* New: Latest Level Stats Display - แสดงสถิติการเล่นล่าสุดของด่านนี้ */}
-                {user && latestUserStats && (
-                    <div className="bg-blue-50 p-4 rounded-xl shadow-inner mt-4 border border-blue-200">
-                        <h3 className="text-lg font-bold text-blue-800 mb-3 text-center">สถิติการเล่นล่าสุดของด่านนี้</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-blue-700">
-                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
-                                <span className="font-medium">WPM:</span>
-                                <span className="font-semibold text-blue-900">{latestUserStats.wpm}</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
-                                <span className="font-medium">ความแม่นยำ:</span>
-                                <span className="font-semibold text-blue-900">{latestUserStats.accuracy}%</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
-                                <span className="font-medium">ข้อผิดพลาด:</span>
-                                <span className="font-semibold text-blue-900">{latestUserStats.totalErrors}</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
-                                <span className="font-medium">จำนวนครั้งที่เล่น:</span>
-                                <span className="font-semibold text-blue-900">{latestUserStats.playCount}</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
-                                <span className="font-medium">คะแนน (10):</span>
-                                <span className="font-semibold text-blue-900">{latestUserStats.score10Point}</span>
-                            </div>
-                            <div className="flex justify-between items-center bg-blue-100 p-2 rounded-md shadow-sm">
-                                <span className="font-medium">เกรด:</span>
-                                <span className="font-semibold text-blue-900">{latestUserStats.grade}</span>
-                            </div>
-                        </div>
-                    </div>
-                )}
-                <footer className="w-full flex justify-center items-center py-4 text-sm text-gray-600 bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl lg:rounded-2xl shadow-inner mt-4 border border-gray-200">
-                    <div className="flex items-center space-x-2">
-                        <div className="flex items-center space-x-1">
-                            <span className="text-blue-600 font-semibold">©</span>
-                            <span className="font-medium">2025</span>
-                        </div>
-                        <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-                        <span className="bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent font-semibold">
-                            Ratchanon Semsayan
-                        </span>
-                        <div className="w-1 h-1 bg-gray-400 rounded-full"></div>
-                        <span className="text-gray-500">All Rights Reserved</span>
-                    </div>
-                </footer>
-            </main>
-        </div>
+            {/* Profile edit page */}
+            <Route
+                path="/profile"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile} skipProfileCheck>
+                        <ProfilePage user={user} userProfile={userProfile} />
+                    </ProtectedRoute>
+                }
+            />
+
+            {/* Survey page for students */}
+            <Route
+                path="/survey/:surveyId"
+                element={
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                        <SurveyPage user={user} />
+                    </ProtectedRoute>
+                }
+            />
+
+            <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
     );
 };
+
+const App: React.FC = () => (
+    <ErrorBoundary>
+        <AppRoutes />
+        <ThemeSwitch />
+    </ErrorBoundary>
+);
 
 export default App;

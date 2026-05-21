@@ -9,15 +9,16 @@ import { getCharToKeyLabelMap, getRecommendedShiftKey } from '../utils/keyboardU
 import { segmentText, detectTextLanguage } from '../utils/textUtils';
 import { calculateWPM, calculateAccuracy, getGrade, getScore10Point } from '../utils/scoreUtils';
 // import {getDefaultCriteria} from '../utils/scoreUtils';
-import { realtimeDb } from '../firebase/firebaseConfig';
-import { ref, set, get } from 'firebase/database';
+import { db } from '../firebase/firebaseConfig';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { keyToFingerMap } from '../data/keyboardData';
 // import {  fingerNamesDisplay } from '../data/keyboardData';
 
 interface TypingGameProps {
   currentLevelId: string;
   user: any; // Firebase User object
-  appId: string;
+  customText?: string;      // inject text โดยตรง (สำหรับ custom lesson / exam)
+  customTimeLimit?: number; // inject time limit (วินาที)
 }
 
 interface TypingGameState {
@@ -55,10 +56,10 @@ interface TypingGameState {
 /**
  * @hook useTypingGame
  * @description Custom hook encapsulating all core typing game logic.
- * @param {TypingGameProps} props - Properties including currentLevelId, user, and appId.
+ * @param {TypingGameProps} props - Properties including currentLevelId, user, and optional custom text/time.
  * @returns {TypingGameState} - An object containing all game states and functions.
  */
-export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps): TypingGameState => {
+export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimit }: TypingGameProps): TypingGameState => {
   // State for level content
   const [fullTextContent, setFullTextContent] = useState<string>('');
   const [segments, setSegments] = useState<string[]>([]);
@@ -166,10 +167,6 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
     };
   }, [textToType, typedText, isCapsLockActive, currentSegmentIndex, segments]);
 
-  /**
-   * @function saveUserStats
-   * @description Saves user typing statistics to Realtime Database.
-   */
   const saveUserStats = useCallback(async (
     finalWPM: number,
     finalAccuracy: number,
@@ -177,32 +174,24 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
     finalGrade: string,
     finalScore10Point: number
   ) => {
-    if (user && realtimeDb) {
-      const userStatsPath = `artifacts/${appId}/users/${user.uid}/stats/${currentLevelId}`;
-      const userStatsRef = ref(realtimeDb, userStatsPath);
-
-      try {
-        const snapshot = await get(userStatsRef);
-        let currentPlayCount = 0;
-        if (snapshot.exists()) {
-          currentPlayCount = snapshot.val().playCount || 0;
-        }
-
-        await set(userStatsRef, {
-          wpm: finalWPM,
-          accuracy: finalAccuracy,
-          totalErrors: finalTotalErrors,
-          grade: finalGrade,
-          score10Point: finalScore10Point,
-          lastPlayed: Date.now(),
-          playCount: currentPlayCount + 1,
-        });
-        console.log("User stats saved successfully!");
-      } catch (error) {
-        console.error("Error saving user stats:", error);
-      }
+    if (!user) return;
+    const statsRef = doc(db, 'users', user.uid, 'stats', currentLevelId);
+    try {
+      const snap = await getDoc(statsRef);
+      const playCount = snap.exists() ? (snap.data().playCount || 0) + 1 : 1;
+      await setDoc(statsRef, {
+        wpm: finalWPM,
+        accuracy: finalAccuracy,
+        totalErrors: finalTotalErrors,
+        grade: finalGrade,
+        score10Point: finalScore10Point,
+        lastPlayed: Date.now(),
+        playCount,
+      });
+    } catch (error) {
+      console.error("Error saving user stats:", error);
     }
-  }, [user, realtimeDb, currentLevelId, appId]);
+  }, [user, currentLevelId]);
 
   /**
    * @callback handleTimeUp
@@ -281,8 +270,12 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
     currentSegmentIndexRef.current = 0;
   }, [timeLimit]);
 
-  // Effect: Load new level text when currentLevelId changes
+  // Effect: Load new level text when currentLevelId or customText changes
   useEffect(() => {
+    if (customText) {
+      setFullTextContent(customText);
+      return;
+    }
     for (const language of languages) {
       for (const unit of language.units) {
         for (const session of unit.sessions) {
@@ -294,7 +287,7 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
         }
       }
     }
-  }, [currentLevelId]);
+  }, [currentLevelId, customText]);
 
   // Effect: Segment text and reset game when fullTextContent changes
   useEffect(() => {
@@ -336,13 +329,19 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('keyup', handleKeyUp);
     return () => {
-      window.removeEventListener('keydown', handleKeyUp);
+      window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('keyup', handleKeyUp);
     };
   }, []);
 
   // Effect: Load time limit when level changes
   useEffect(() => {
+    if (customTimeLimit !== undefined) {
+      setTimeLimit(customTimeLimit);
+      setRemainingTime(customTimeLimit);
+      setIsTimeUp(false);
+      return;
+    }
     for (const language of languages) {
       for (const unit of language.units) {
         for (const session of unit.sessions) {
@@ -357,7 +356,7 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
         }
       }
     }
-  }, [currentLevelId]);
+  }, [currentLevelId, customTimeLimit]);
 
   // Effect: Timer logic
   useEffect(() => {
@@ -405,6 +404,15 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
    * @description Handles the "Reset" button click.
    */
   const handleResetGame = useCallback(() => {
+    if (customText) {
+      const newSegments = segmentText(customText);
+      setSegments(newSegments);
+      segmentsRef.current = newSegments;
+      setTextToType(newSegments[0] || '');
+      textToTypeRef.current = (newSegments[0] || '');
+      resetGameStates();
+      return;
+    }
     for (const language of languages) {
       for (const unit of language.units) {
         for (const session of unit.sessions) {
@@ -421,7 +429,7 @@ export const useTypingGame = ({ currentLevelId, user, appId }: TypingGameProps):
         }
       }
     }
-  }, [currentLevelId, resetGameStates]);
+  }, [currentLevelId, customText, resetGameStates]);
 
   /**
    * @function handleStartPause

@@ -1,21 +1,23 @@
-// firebaseConfig.ts (ตัวอย่าง)
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getDatabase } from "firebase/database"; // สำหรับ Realtime Database
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 
-// Your web app's Firebase configuration (ต้องใส่ข้อมูลของคุณเอง)
 const firebaseConfig = {
-
-  // apiKey: "YOUR_API_KEY",
-  // authDomain: "YOUR_AUTH_DOMAIN",
-  // projectId: "YOUR_PROJECT_ID",
-  // storageBucket: "YOUR_STORAGE_BUCKET",
-  // messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  // appId: "YOUR_APP_ID",
-  // databaseURL: "YOUR_DATABASE_URL", // สำคัญมากสำหรับ Realtime Database
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
 export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-export const realtimeDb = getDatabase(app); // นี่คือ Realtime Database instance
+export const db = getFirestore(app);
+
+// เชื่อมต่อ emulator อัตโนมัติเมื่อรัน dev (VITE_USE_EMULATOR=true)
+if (import.meta.env.VITE_USE_EMULATOR === 'true') {
+  connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  console.info('[DEV] Firebase Emulator connected');
+}
