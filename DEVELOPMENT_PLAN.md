@@ -1,7 +1,7 @@
 # แผนพัฒนาระบบฝึกพิมพ์ดีด (Development Plan)
 
-> อัปเดตล่าสุด: **2026-05-21** (Sprint 0→R+4 เสร็จครบ — ระบบพร้อมเก็บข้อมูลวิจัย)  
-> สถานะปัจจุบัน: **v3.5.0** — ทดสอบครบ ✅ 46/46 ทุก role
+> อัปเดตล่าสุด: **2026-05-21** (UX/UI Redesign Plan — ทิศทางตกลงแล้ว)  
+> สถานะปัจจุบัน: **v3.5.0** — ทดสอบครบ ✅ 46/46 | Phase 6 (UX Redesign) อยู่ในแผน
 
 ---
 
@@ -19,7 +19,7 @@
 | ครูดูเฉพาะห้องตัวเอง (Teacher Scope) | ✅ เสร็จแล้ว |
 | ระบบสอบทั่วไป (Exam + scorePolicy) | ✅ เสร็จแล้ว |
 | Responsive UI ทุก viewport | ✅ เสร็จแล้ว |
-| Gamification & UX | ❌ ยังไม่เริ่ม |
+| Gamification & UX | 📋 วางแผนแล้ว (ดู UX_IMPROVEMENT_PLAN.md) |
 | Advanced Reports & Export | ❌ ยังไม่เริ่ม |
 
 ---
@@ -37,7 +37,7 @@
 | R | Survey + Research Export | ✅ เสร็จ | 2026-05-20 |
 | 4 | Exam System + Teacher Dashboard | ✅ เสร็จ | 2026-05-21 |
 | — | Responsive Fix + Automated Testing | ✅ เสร็จ | 2026-05-21 |
-| 6 | Gamification & UX | ❌ ยังไม่เริ่ม | — |
+| 6 | UX/UI Redesign | 📋 วางแผนแล้ว (ดู UX_IMPROVEMENT_PLAN.md) | — |
 | 7 | Reports & Export (Advanced) | ❌ ยังไม่เริ่ม | — |
 
 ---
@@ -187,7 +187,50 @@ O1 (Pre-test) → X (การสอนด้วยระบบ) → O2 (Post-te
 
 ## Phase ที่ยังเหลือ
 
-### Phase 6 — Gamification & UX
+### Phase 6 — UX/UI Redesign
+> ทิศทางตกลงแล้ว — ดูรายละเอียดเต็มใน `UX_IMPROVEMENT_PLAN.md`
+
+**Design Direction ที่ตกลง:**
+- Visual: Modern Dashboard (card-based, gradient, glassmorphism เบาๆ)
+- Layout: Focus Mode — UI fade เมื่อ focus ช่องพิมพ์, Keyboard ยังแสดง
+- Theme: Light default + OS auto-detect + profile setting + accent color picker
+- Teacher page: Full-Width Dashboard (ลบ sidebar, ใช้ dropdown + full-width tabs)
+- Animation: 150–200ms เท่านั้น ไม่มี spring/bounce
+- Mobile: Teacher = desktop-first, Student = mobile-first
+
+**Sprint UX-1 — Quick Wins:**
+- [ ] U1 — Wrong char highlight แทน line-through (TypingArea)
+- [ ] U2 — เปรียบเทียบ WPM กับครั้งก่อน + Personal Best (GameResults)
+- [ ] U3 — Progress bar full-width เหนือ textarea
+- [ ] U4 — ปุ่ม "ถัดไป" / "ลองอีกครั้ง" หลังจบ
+- [ ] U15 — Smooth number transitions
+- [ ] A1 — Empty state actionable (ไม่มีข้อมูล → บอก next step)
+- [ ] A2 — First-join onboarding card (นักเรียน join ห้องครั้งแรก)
+- [ ] B1 — Cursor blinking + extra-char underline สีส้ม
+- [ ] D1 — Notification badge บน nav เมื่อมีสอบ/แบบสอบถามรอ
+- [ ] E2 — Teacher pinned quick action bar
+
+**Sprint UX-2 — Interaction Polish:**
+- [ ] U5 — Shake animation เมื่อพิมพ์ผิด
+- [ ] U6 — Pre-exam briefing card ก่อนเริ่มสอบ
+- [ ] U7 — Lesson card states 4 แบบ (ยังไม่เริ่ม/กำลังฝึก/ครบแล้ว/ไม่กำหนด)
+- [ ] U10 — Unified Action Hub (รวม banner สอบ/ทดสอบ/แบบสอบถาม)
+- [ ] U14 — Font size control (A- / A+ persist localStorage)
+- [ ] B2 — Live stats smoothing (WPM อัปเดตทุก 3 วิ)
+- [ ] B3 — Red border flash เมื่อพิมพ์ผิด 3 ครั้งติดกัน
+- [ ] C1 — Enhanced result card (top 3 อักษรผิด + เทียบครั้งก่อน)
+- [ ] U12 — Quick stats header ในห้องครู
+
+**Sprint UX-3 — Visual Depth & Redesign (breaking changes):**
+- [ ] E1 — Teacher full-width dashboard layout restructure
+- [ ] U8 — Live WPM Sparkline (SVG, ไม่ต้อง library)
+- [ ] U9 — Keyboard finger zone colors (passive, opacity 20%)
+- [ ] U11 — Countdown ring timer SVG ในห้องสอบ
+- [ ] U13 — WPM History Chart (UserDashboard)
+- [ ] Theme system redesign (Light/Dark + accent color)
+- [ ] Focus Mode implementation
+
+**Gamification (เลื่อนมาจากแผนเดิม):**
 - [ ] Sound Effects (click, error, level complete) — toggle ปิดได้
 - [ ] Achievement Badges
 - [ ] Daily Practice Streak
