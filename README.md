@@ -9,7 +9,7 @@
 
 ---
 
-## สถานะระบบ (ณ 2026-05-21)
+## สถานะระบบ (ณ 2026-05-23)
 
 | ระบบ | สถานะ | Route |
 |------|--------|-------|
@@ -22,9 +22,9 @@
 | Exam System | ✅ สมบูรณ์ | `/exam/:examId` |
 | Survey & Research Export | ✅ สมบูรณ์ | `/survey/:surveyId` |
 | Teacher Dashboard | ✅ สมบูรณ์ | `/admin` (teacher role) |
-| Admin Dashboard | ✅ สมบูรณ์ | `/admin` (superAdmin role) |
-| Gamification & UX | ❌ ยังไม่เริ่ม | — |
-| Advanced Reports | ❌ ยังไม่เริ่ม | — |
+| Admin Dashboard | ✅ สมบูรณ์ | `/admin` (admin/superAdmin role) |
+| UX/UI Redesign (Sprint UX-0 ถึง UX-4) | ✅ สมบูรณ์ | ทุกหน้า |
+| Advanced Reports (Pre/Post comparison, leaderboard) | ✅ สมบูรณ์ | `/admin`, `/my-classroom` |
 
 ---
 
@@ -35,7 +35,8 @@
 | `guest` | ฝึกพิมพ์ได้ ไม่บันทึกคะแนน |
 | `student` | ฝึกพิมพ์ + บันทึกคะแนน + เข้าห้องเรียน + สอบ + ตอบแบบสอบถาม |
 | `teacher` | ทุกอย่างของ student + จัดการห้องเรียน + สร้างสอบ/แบบสอบถาม + export ข้อมูลวิจัย |
-| `superAdmin` | ทุกอย่าง + จัดการ user/role ทั้งระบบ |
+| `admin` | ทุกอย่างของ teacher + จัดการ user ทั้งระบบ + ดู/ย้าย classroom ทุกห้อง (แต่งตั้งโดย superAdmin) |
+| `superAdmin` | ทุกอย่าง + จัดการ role ทุก level + แต่งตั้ง/ถอด admin |
 
 ---
 
@@ -54,7 +55,7 @@ src/
 │   │                      LevelSelector, LevelScoringCriteria
 │   ├── prepost/        ← ExamSetEditor, PrePostTestCard, PrePostTestCreate,
 │   │                      PrePostTestList
-│   ├── shared/         ← ThemeSwitch
+│   ├── shared/         ← ThemeSwitch, ConfirmDialog, SkeletonCard
 │   └── survey/         ← SurveyCard, SurveyCreate, SurveyList,
 │                          SurveyResultsDashboard, ResearchExport
 ├── contexts/
@@ -85,7 +86,10 @@ src/
 ├── utils/
 │   ├── scoreUtils.ts
 │   ├── classroomUtils.ts
-│   └── researchExport.ts
+│   ├── researchExport.ts
+│   ├── asyncUtils.ts       ← debounce, withRetry, useSubmitGuard
+│   ├── clipboardUtils.ts   ← copyToClipboard, getJoinLink
+│   └── dateUtils.ts        ← toThaiDate (รองรับ Timestamp/Date/ms/relative)
 └── data/
     ├── data.ts
     └── keyboardData.ts
@@ -97,11 +101,12 @@ src/
 
 ```
 users/{uid}
-  ├── uid, email, role (student/teacher/superAdmin)
+  ├── uid, email, role (guest/student/teacher/admin/superAdmin)
   ├── firstName, lastName, studentId
   ├── displayName, photoURL
-  ├── isProfileComplete, createdAt
+  ├── isProfileComplete, isDeactivated, createdAt
   └── stats/{levelId}               ← สถิติฝึกพิมพ์หลัก (WPM, accuracy, playCount)
+        └── sessions/{sessionId}    ← ประวัติการเล่นรายครั้ง (wpm, accuracy, duration, createdAt)
 
 classrooms/{classroomId}
   ├── classroomId, name, teacherUid
@@ -210,7 +215,7 @@ firebase emulators:start
 > ⚠️ ต้องรัน Emulator **ก่อน** `npm run dev` เมื่อ `VITE_USE_EMULATOR=true`  
 > ถ้า Emulator ไม่ได้รัน → Firebase จะ error ทุก request
 
-### 5. Testing (Automated)
+### 5. Testing (Playwright E2E)
 
 ```bash
 # ต้องรัน Emulator และ dev server ก่อนเสมอ
@@ -220,11 +225,19 @@ firebase emulators:start
 # Terminal 2:
 npm run dev
 
-# Terminal 3:
-node full-test.mjs
+# Terminal 3: รันทดสอบทั้งหมด (106 test cases)
+npx playwright test
+
+# รันเฉพาะ block:
+npx playwright test e2e/block0-auth.spec.ts
+npx playwright test e2e/block2-classroom-teacher.spec.ts
+
+# ดูผล report:
+npx playwright show-report
 ```
 
-ผลการทดสอบ: `TEST-REPORT.md` + screenshots ใน `test-screenshots/`
+Suite ครอบคลุม 11 spec files (block0–block10) — Desktop Chrome + Mobile iPhone
+ผลล่าสุด: **106/106 PASS** (2026-05-23)
 
 ### 6. Build & Deploy
 
