@@ -1,7 +1,7 @@
 # แผนพัฒนา UX/UI (UX Improvement Plan)
 
-> สร้าง: 2026-05-21 | อัปเดต: 2026-05-21  
-> สถานะ: วางแผนแล้ว — ยังไม่เริ่ม implement
+> สร้าง: 2026-05-21 | อัปเดต: 2026-05-23  
+> สถานะ: ✅ Sprint UX-0 | UX-0b | UX-1 | UX-2 | UX-3 เสร็จแล้ว — Sprint UX-4 (T9 T10 X5 X6 X3) เหลือ
 
 ---
 
@@ -51,6 +51,20 @@
 - Teacher page: **desktop-first** (ครูใช้คอมเป็นหลัก)
 - Student pages (Practice, Classroom): **mobile-first**
 
+### Role System (ตกลงแล้ว ✅)
+| Role | สิทธิ์ | หมายเหตุ |
+|------|--------|---------|
+| `guest` | ฝึกพิมพ์อย่างเดียว | |
+| `student` | ฝึก + ห้องเรียน + สอบ + แบบสอบถาม | |
+| `teacher` | student + จัดการห้องเรียน + สร้างสอบ + export | |
+| `admin` | teacher + จัดการ user + ดูห้องเรียนทั้งระบบ | แต่งตั้งโดย superAdmin เท่านั้น |
+| `superAdmin` | ทุกอย่าง + แต่งตั้ง/ถอด admin | มีได้คนเดียว — set ใน Firestore โดยตรง |
+
+**Admin vs SuperAdmin:**
+- Admin **ทำได้**: เปลี่ยน role (student↔teacher), ดูห้องเรียนทั้งระบบ, deactivate user
+- Admin **ทำไม่ได้**: แต่งตั้ง/ถอด admin, ลบ superAdmin, export ข้อมูลทั้งระบบ
+- SuperAdmin สร้างผ่าน Firestore Console โดยตรง (ไม่มี UI สร้าง superAdmin)
+
 ---
 
 ## ภาพรวม
@@ -81,6 +95,14 @@
 | U14 | Font size control ใน TypingArea | TypingArea | S | ★★☆☆☆ |
 | U15 | Smooth number transitions (WPM, accuracy) | StatsDisplay | S | ★★★☆☆ |
 
+### กลุ่ม F — Foundation UX (ทำก่อน Sprint UX-1)
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| F1 | Skeleton loading states ขณะรอข้อมูล Firestore | ทุกหน้า | S | ★★★★★ |
+| F2 | Toast / Snackbar notifications (สำเร็จ / error) | ทุกหน้า | XS | ★★★★★ |
+| F3 | Confirmation dialog สำหรับ destructive actions (ลบ/รีเซ็ต) | ทุกหน้า | S | ★★★★★ |
+| G1 | ปุ่ม copy Join Code (1 คลิก) | TeacherPage | XS | ★★★★☆ |
+
 ### กลุ่ม A — Empty States & Onboarding
 | # | รายการ | หน้า | Effort | Impact |
 |---|--------|------|--------|--------|
@@ -109,6 +131,102 @@
 |---|--------|------|--------|--------|
 | E1 | Teacher full-width dashboard layout + quick stats header | TeacherPage | L | ★★★★★ |
 | E2 | Pinned quick action bar: [ + บทเรียน ] [ เปิด Pre-test ] [ Export CSV ] | TeacherPage | S | ★★★☆☆ |
+
+### กลุ่ม H — Teacher Workflow (ที่ขาดไป)
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| H1 | ค้นหา/กรองนักเรียนในตาราง | TeacherPage | S | ★★★★☆ |
+| H2 | Drill-down: กดชื่อนักเรียน → ดูสถิติรายคน | TeacherPage | M | ★★★★☆ |
+| H3 | Duplicate lesson / exam (คัดลอกแล้วแก้) | TeacherPage | S | ★★★☆☆ |
+| H4 | Auto-close exam ตามวันที่/เวลา | TeacherPage | M | ★★★☆☆ |
+| H5 | แสดงนักเรียนที่ยัง "ไม่ได้ join" ห้อง | TeacherPage | M | ★★★★☆ |
+| H6 | เรียงลำดับ lesson (ปุ่ม ↑ ↓) | TeacherPage | S | ★★★☆☆ |
+| H7 | Export PDF รายงาน (print-friendly) | TeacherPage | S | ★★★☆☆ |
+
+### กลุ่ม SA — SuperAdmin & Admin
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| SA1 | Admin role ใหม่ (types + Firestore rules + route guard) | ระบบ | M | ★★★★★ |
+| SA2 | SuperAdmin แต่งตั้ง/ถอด Admin (dropdown ใน user table) | AdminDashboard | S | ★★★★★ |
+| SA3 | ค้นหา user (ชื่อ / email / studentId) | AdminDashboard | S | ★★★★☆ |
+| SA4 | Deactivate / ลบ account | AdminDashboard | S | ★★★★☆ |
+| SA5 | Tab "ห้องเรียน" — ดูห้องเรียนทั้งระบบ | AdminDashboard | M | ★★★★☆ |
+| SA6 | คลิกห้อง → ดูข้อมูลภายใน (members, lessons, stats) | AdminDashboard | M | ★★★☆☆ |
+| SA7 | ย้าย classroom ไปครูคนอื่น | AdminDashboard | S | ★★★☆☆ |
+| SA8 | System-wide stats (user แยก role, ห้องเรียน active) | AdminDashboard | S | ★★★☆☆ |
+| SA9 | Audit trail: openedAt/closedAt บนสอบ/ทดสอบ | ทุกหน้าที่ toggle | S | ★★★★★ |
+
+### กลุ่ม S — Student UX
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| S1 | รองรับหลายห้องเรียนพร้อมกัน + dropdown สลับห้อง | StudentClassroomPage | M | ★★★★☆ |
+| S2 | ดูผลสอบ/ทดสอบย้อนหลังตัวเอง | StudentClassroomPage | M | ★★★★★ |
+| S3 | Resume กลางสอบถ้า browser ปิด/หลุด | ExamRoom, PrePostTestRoom | M | ★★★★☆ |
+| S4 | แสดงว่าครั้งไหน "นับ" ต่อ requiredPlayCount | StudentClassroomPage | S | ★★★☆☆ |
+| S5 | ออกจากห้องเรียนได้ (leave classroom) | StudentClassroomPage | S | ★★★☆☆ |
+
+### กลุ่ม X — System / Cross-cutting
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| X1 | Thai date format พ.ศ. ทุก timestamp ในระบบ | ทุกหน้า | XS | ★★★★☆ |
+| X2 | Session timeout handling กลางสอบ | ExamRoom, PrePostTestRoom | S | ★★★★☆ |
+| X3 | ลบ account ตัวเอง (PDPA) | ProfilePage | L | ★★★☆☆ |
+| X4 | Direct join link (URL แทน code 6 หลัก) | TeacherPage | S | ★★★☆☆ |
+| X5 | Classroom archive — จบเทอมปิดห้องโดยไม่ลบ (ข้อมูลวิจัยยังอยู่) | TeacherPage, AdminDashboard | S | ★★★★☆ |
+| X6 | Leaderboard WPM รายห้อง — ranking นักเรียนในห้องเดียวกัน | StudentClassroomPage | M | ★★★☆☆ |
+
+### กลุ่ม R — Research System (งานวิจัย — Critical)
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| R1 | Pre/Post comparison dashboard — แสดง O1 vs O2 เคียงกัน (pairId มีแล้วแต่ยังไม่มี UI) | TeacherPage | M | ★★★★★ |
+| R2 | Result published notification — นักเรียนรู้ว่าครูปล่อยผลแล้ว (isResultPublished ชัดเจน) | StudentClassroomPage | S | ★★★★☆ |
+
+### กลุ่ม T — Teacher Operations (ที่ยังขาด)
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| T8 | Practice deadline — กำหนดวันส่ง (dueDate) บน CustomLesson | TeacherPage | S | ★★★★☆ |
+| T9 | Clone classroom ข้ามเทอม — copy lessons/exams ไปห้องใหม่ (ไม่รวม members/results) | TeacherPage | M | ★★★★☆ |
+| T10 | Live exam oversight — ดู real-time ว่านักเรียนคนไหนกำลังสอบ/ส่งแล้ว/ยังไม่เข้า | TeacherPage | M | ★★★☆☆ |
+
+### กลุ่ม SX — Student Extra
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| S6 | แสดงจำนวน retake ที่เหลือก่อนเข้าสอบ (ใน briefing card U6) | ExamRoom | XS | ★★★★☆ |
+| S7 | แสดง assignedSet ของตัวเองก่อนเข้าสอบ | ExamRoom, PrePostTestRoom | XS | ★★★☆☆ |
+
+### กลุ่ม Y — Infrastructure (Production Critical)
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| Y1 | Firestore composite indexes — plan และสร้าง index สำหรับ query ที่ซับซ้อน | firestore.indexes.json | S | ★★★★★ |
+| Y2 | Rate limiting / debounce — ป้องกัน spam write (retry, submit ซ้ำเร็วเกิน) | useExam, usePrePostTest | S | ★★★★☆ |
+
+### กลุ่ม Z — Data Model Gaps (ต้องแก้ก่อน feature อื่นที่ depend)
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| Z1 | Practice session history subcollection — ต้องมีก่อน U2/U13/S4 ทำงานได้ | users/{uid}/stats/{levelId}/sessions | M | ★★★★★ |
+| Z2 | Auto-number students — ปุ่ม assign เลขที่อัตโนมัติ (เรียง A–Z → 1,2,3...) | TeacherPage MemberTable | S | ★★★☆☆ |
+
+### กลุ่ม W — Stability & Performance
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| W1 | Error Boundary — ครอบทุก route ป้องกันหน้าขาวเมื่อ component crash | App.tsx | XS | ★★★★★ |
+| W2 | Route-level Lazy Loading — `React.lazy()` + Suspense fallback (skeleton) | App.tsx | S | ★★★☆☆ |
+
+### กลุ่ม P — Security & Data Integrity
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| P1 | Multi-tab prevention — กัน exam เปิดหลาย tab พร้อมกัน (anti-cheat) | ExamRoom, PrePostTestRoom | XS | ★★★★★ |
+| P2 | Research data lock — ล็อค examSets เมื่อมีผลส่งแล้ว ป้องกันครูแก้ชุดข้อสอบ | useExam, usePrePostTest | S | ★★★★★ |
+| P3 | Join code regeneration — ครูออก code ใหม่ได้ (ยกเลิก code เดิม) | TeacherPage | XS | ★★★☆☆ |
+| P4 | Lesson text preview — ดูตัวอย่างก่อน save (แสดงแบบเดียวกับ TypingArea) | LessonManager | S | ★★★☆☆ |
+| P5 | Export member list CSV — แยกจาก research export (ชื่อ + เลขที่ + email) | TeacherPage | XS | ★★★☆☆ |
+| P6 | `updatedAt` + `updatedBy` บน CustomLesson และ ExamSet ทุกครั้งที่แก้ไข | ทุกที่ที่ edit | XS | ★★★☆☆ |
+
+### กลุ่ม V — Platform Compatibility
+| # | รายการ | หน้า | Effort | Impact |
+|---|--------|------|--------|--------|
+| V1 | iOS Safari fullscreen fallback — Safari ไม่รองรับ `requestFullscreen` | ExamRoom, PrePostTestRoom | S | ★★★★☆ |
+| V2 | Exam auto-submit เมื่อครู force-close — `onSnapshot` บน `isOpen` | ExamRoom, PrePostTestRoom | S | ★★★★★ |
 
 ---
 
@@ -499,47 +617,430 @@ function useAnimatedNumber(target: number, duration = 300) {
 
 ## ลำดับการทำงาน (Sprint UX)
 
+## รายละเอียดรายการใหม่ (R, T, SX, Y)
+
+---
+
+### R1 — Pre/Post Comparison Dashboard
+**ไฟล์**: TeacherPage (tab "การทดสอบ")  
+**ปัญหา**: `pairId` มีใน data model แต่ครูดูผล Pre กับ Post เทียบกันไม่ได้บน UI  
+**แก้**: ใน PrePostTestList เพิ่ม view "เปรียบเทียบ Pre/Post" — จับคู่ด้วย pairId แสดงตาราง:
+```
+ชื่อ-นามสกุล | Pre WPM | Post WPM | Δ WPM | Pre Score | Post Score | ผ่าน?
+สมชาย ใจดี  |   25    |   38     | +13   |   6/10    |   8/10     |  ✅
+```
+
+---
+
+### R2 — Result Published Notification
+**ไฟล์**: StudentClassroomPage  
+**แก้**: เมื่อ `isResultPublished = true` → แสดง banner/badge "ครูปล่อยผลแล้ว — ดูผลของคุณ" พร้อมลิงก์ไปยังผล
+
+---
+
+### T8 — Practice Deadline (dueDate)
+**แก้**: เพิ่ม `dueDate?: Timestamp` ใน `CustomLesson`  
+แสดงใน lesson card: "ส่งภายใน 30 พ.ค. 2569" + สีแดงถ้าเกินกำหนด  
+LessonManager: เพิ่ม date picker field
+
+---
+
+### T9 — Clone Classroom ข้ามเทอม
+**แก้**: ปุ่ม "คัดลอกการตั้งค่า" บน classroom card:
+```tsx
+const cloneClassroom = async (sourceId: string, newName: string) => {
+  // 1. สร้าง classroom ใหม่
+  // 2. copy lessons ทั้งหมด (ไม่รวม results)
+  // 3. copy examSets จาก exams (ไม่รวม results)
+  // 4. ไม่ copy members, surveys, responses
+};
+```
+
+---
+
+### T10 — Live Exam Oversight
+**แก้**: ใน ExamList results modal เพิ่ม real-time status column  
+ใช้ `onSnapshot` บน `exams/{id}/results` — ถ้ามี doc = ส่งแล้ว, ไม่มี = ยังไม่ส่ง  
+แสดง: 🟢 กำลังสอบ (ถ้า exam เปิดอยู่และยังไม่มีผล) / ✅ ส่งแล้ว / ⬜ ยังไม่เข้า
+
+---
+
+### S6 + S7 — Briefing Card Enhancement
+เพิ่มใน U6 briefing card:
+```
+│  📄  ชุดที่ได้รับ: ชุดที่ 2               ← S7
+│  🔄  สิทธิ์สอบซ้ำที่เหลือ: 2 ครั้ง       ← S6
+```
+คำนวณ retake ที่เหลือ: `maxRetake - attemptCount` (0 = ไม่จำกัด แสดง "ไม่จำกัด")
+
+---
+
+### Y1 — Firestore Composite Indexes
+**ไฟล์**: `firestore.indexes.json`  
+Query ที่ต้องการ index เพิ่ม:
+```json
+{
+  "indexes": [
+    {
+      "collectionGroup": "members",
+      "fields": [{ "fieldPath": "uid" }, { "fieldPath": "classroomId" }]
+    },
+    {
+      "collectionGroup": "results",
+      "fields": [{ "fieldPath": "uid" }, { "fieldPath": "submittedAt", "order": "DESCENDING" }]
+    }
+  ]
+}
+```
+ต้อง deploy index ก่อน production — ถ้าไม่สร้าง query จะ error พร้อม link สร้าง index อัตโนมัติ
+
+---
+
+### W1 — Error Boundary
+**ไฟล์**: `src/components/shared/ErrorBoundary.tsx`, `App.tsx`  
+**แก้**: React class component ครอบทุก route — แสดง fallback UI แทนหน้าขาว:
+```tsx
+class ErrorBoundary extends React.Component {
+  state = { hasError: false, error: null };
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  render() {
+    if (this.state.hasError) return (
+      <div className="flex flex-col items-center justify-center min-h-screen gap-4">
+        <p>เกิดข้อผิดพลาด กรุณารีเฟรชหน้า</p>
+        <button onClick={() => window.location.reload()}>รีเฟรช</button>
+      </div>
+    );
+    return this.props.children;
+  }
+}
+// App.tsx: ครอบแต่ละ <Route> ด้วย <ErrorBoundary>
+```
+
+---
+
+### W2 — Route-level Lazy Loading
+**ไฟล์**: `App.tsx`  
+**แก้**: แยก bundle ต่อ page — หน้าหนักเช่น ExamRoom, TeacherPage โหลดเมื่อต้องการ:
+```tsx
+const TeacherPage = React.lazy(() => import('./pages/TeacherPage'));
+const ExamRoom = React.lazy(() => import('./pages/ExamRoom'));
+
+<Suspense fallback={<SkeletonCard lines={5} />}>
+  <Routes>...</Routes>
+</Suspense>
+```
+ใช้ `SkeletonCard` (F1) เป็น fallback — ไม่ต้องสร้าง component ใหม่
+
+---
+
+### Z1 — Practice Session History
+**ปัญหา**: `users/{uid}/stats/{levelId}` เก็บแค่ค่าล่าสุด — U2, U13, S4 ต้องการ history ต่อ session  
+**แก้**: เพิ่ม subcollection `sessions` ใน `useTypingGame.ts` ตอน save stats:
+```typescript
+// เดิม: update stats doc เดียว
+// ใหม่: update stats doc + addDoc sessions
+const sessionRef = collection(db, 'users', uid, 'stats', levelId, 'sessions');
+await addDoc(sessionRef, {
+  wpm, accuracy, score10Point,
+  counted: score10Point >= passingScore, // นับต่อ requiredPlayCount ไหม
+  playedAt: serverTimestamp(),
+});
+// stats doc ยังอัปเดตเหมือนเดิม (wpm, accuracy, playCount, lastPlayed)
+```
+Firestore rules: อ่านได้เฉพาะ owner + teacher ของห้องที่นักเรียนอยู่
+
+---
+
+### Z2 — Auto-number Students
+```tsx
+// MemberTable — ปุ่ม "กำหนดเลขที่อัตโนมัติ"
+const autoNumber = async () => {
+  const sorted = [...members].sort((a, b) =>
+    (a.displayName ?? '').localeCompare(b.displayName ?? '', 'th')
+  );
+  await Promise.all(sorted.map((m, i) =>
+    updateDoc(memberRef(m.uid), { studentNumber: i + 1 })
+  ));
+  toast.success('กำหนดเลขที่อัตโนมัติแล้ว');
+};
+```
+
+---
+
+### Y2 — Rate Limiting / Debounce
+**แก้**: เพิ่ม debounce และ loading state บนทุก Firestore write ที่ user trigger:
+```tsx
+const [submitting, setSubmitting] = useState(false);
+const handleSubmit = async () => {
+  if (submitting) return; // กัน double-click
+  setSubmitting(true);
+  try { await submitResult(...); }
+  finally { setSubmitting(false); }
+};
+<button disabled={submitting}>{submitting ? 'กำลังส่ง...' : 'ส่งคำตอบ'}</button>
+```
+
+---
+
+---
+
+## รายละเอียดรายการใหม่ (P, V)
+
+---
+
+### P1 — Multi-Tab Prevention
+**ไฟล์**: [src/pages/ExamRoom.tsx](src/pages/ExamRoom.tsx), [src/pages/PrePostTestRoom.tsx](src/pages/PrePostTestRoom.tsx)  
+**ปัญหา**: นักเรียนอาจเปิด exam ใน 2 tab พร้อมกัน → submit 2 ครั้ง หรือใช้ tab อื่น Google ระหว่างสอบ  
+**แก้**: ใช้ `sessionStorage` flag เมื่อเข้าห้องสอบ — ถ้า flag มีอยู่แล้วให้ block:
+```tsx
+useEffect(() => {
+  const key = `exam-open-${examId}`;
+  if (sessionStorage.getItem(key)) {
+    // แสดง error: "คุณกำลังสอบในอีก tab หนึ่งอยู่แล้ว"
+    setBlocked(true);
+    return;
+  }
+  sessionStorage.setItem(key, '1');
+  return () => sessionStorage.removeItem(key);
+}, [examId]);
+```
+**หมายเหตุ**: `sessionStorage` ต่างกันระหว่าง tab — tab ใหม่จะไม่เห็น flag ของ tab เก่า  
+วิธีที่แข็งแกร่งกว่า: `BroadcastChannel` API ส่ง ping ข้าม tab และรอ pong (ถ้า pong ตอบกลับ = มีสอบอยู่แล้ว)
+
+---
+
+### P2 — Research Data Lock
+**ไฟล์**: [src/hooks/useExam.ts](src/hooks/useExam.ts), [src/hooks/usePrePostTest.ts](src/hooks/usePrePostTest.ts)  
+**ปัญหา**: ถ้าครูแก้ `examSets` หลังนักเรียนส่งผลแล้ว — ผลที่ส่งมาจะอิงชุดข้อสอบชุดเก่า แต่ข้อมูลในฐานข้อมูลเปลี่ยนไป ทำให้ข้อมูลวิจัยเสีย  
+**แก้**: เพิ่ม `isLocked: boolean` บน exam/prePostTest doc — set เป็น `true` อัตโนมัติเมื่อมีผลแรกส่งเข้ามา:
+```typescript
+// ใน submitResult()
+const examDoc = await getDoc(examRef);
+if (!examDoc.data()?.isLocked) {
+  await updateDoc(examRef, { isLocked: true });
+}
+await setDoc(resultRef, resultData);
+```
+UI: แสดง 🔒 icon บน exam ที่ locked — ครูแก้ชุดข้อสอบไม่ได้ แต่ยังเปิด/ปิดได้  
+Firestore rules: `allow update: if !resource.data.isLocked || request.resource.data.examSets == resource.data.examSets`
+
+---
+
+### P3 — Join Code Regeneration
+**ไฟล์**: [src/pages/TeacherPage.tsx](src/pages/TeacherPage.tsx), [src/hooks/useClassroom.ts](src/hooks/useClassroom.ts)  
+**ปัญหา**: ถ้า join code หลุดออกไปนอกห้อง ครูต้องการออก code ใหม่แต่ปัจจุบันทำไม่ได้  
+**แก้**:
+```typescript
+const regenerateJoinCode = async (classroomId: string, oldCode: string) => {
+  const newCode = generateCode(); // 6 หลัก A-Z0-9
+  await deleteDoc(doc(db, 'joinCodes', oldCode));
+  await setDoc(doc(db, 'joinCodes', newCode), { classroomId, createdBy: uid, createdAt: serverTimestamp() });
+  await updateDoc(classroomRef, { joinCode: newCode });
+};
+```
+ปุ่ม "🔄 ออก Code ใหม่" + confirm dialog ("code เดิมจะใช้ไม่ได้ทันที")
+
+---
+
+### P4 — Lesson Text Preview
+**ไฟล์**: [src/components/classroom/LessonManager.tsx](src/components/classroom/LessonManager.tsx)  
+**ปัญหา**: ครูพิมพ์ข้อความใน textarea แต่ไม่รู้ว่าจะแสดงผลใน TypingArea จริง ๆ อย่างไร (spacing, line break)  
+**แก้**: เพิ่ม preview panel ด้านขวา form — แสดงข้อความในรูปแบบเดียวกับ TypingArea (font, size, color สีเทา):
+```tsx
+{lessonText && (
+  <div className="mt-2 p-3 rounded border text-sm font-mono leading-relaxed opacity-60">
+    <span className="text-xs text-gray-400 block mb-1">ตัวอย่างใน TypingArea:</span>
+    {lessonText}
+  </div>
+)}
+```
+
+---
+
+### P5 — Export Member List CSV
+**ไฟล์**: [src/pages/TeacherPage.tsx](src/pages/TeacherPage.tsx)  
+**ปัญหา**: ครูอาจต้องการรายชื่อนักเรียนในห้องเป็น CSV (สำหรับทำเอกสาร) แยกจาก research export ที่ซับซ้อน  
+**แก้**: ปุ่ม "Export รายชื่อ CSV" ใน MemberTable → download ไฟล์:
+```
+เลขที่,ชื่อ-นามสกุล,อีเมล,วันที่เข้าร่วม
+1,สมชาย ใจดี,somchai@school.ac.th,22/05/2569
+```
+ใช้ BOM UTF-8 เหมือน research export เพื่อให้เปิดใน Excel ได้ถูกต้อง
+
+---
+
+### P6 — updatedAt + updatedBy Audit Fields
+**ไฟล์**: [src/hooks/useClassroom.ts](src/hooks/useClassroom.ts), [src/hooks/useExam.ts](src/hooks/useExam.ts)  
+**ปัญหา**: ถ้ามีคนแก้บทเรียนหรือชุดข้อสอบ ไม่มีทางรู้ว่าใครแก้เมื่อไหร่  
+**แก้**: ทุก `updateDoc` บน CustomLesson และ ExamSet เพิ่ม:
+```typescript
+await updateDoc(lessonRef, {
+  ...lessonData,
+  updatedAt: serverTimestamp(),
+  updatedBy: currentUser.uid,
+});
+```
+แสดงใน UI: "แก้ไขล่าสุด: 22 พ.ค. 2569 โดย อ.สมชาย" (tooltip หรือ footnote เล็ก ๆ)
+
+---
+
+### V1 — iOS Safari Fullscreen Fallback
+**ไฟล์**: [src/pages/ExamRoom.tsx](src/pages/ExamRoom.tsx), [src/pages/PrePostTestRoom.tsx](src/pages/PrePostTestRoom.tsx)  
+**ปัญหา**: `document.documentElement.requestFullscreen()` ไม่ทำงานบน iOS Safari — นักเรียนที่ใช้ iPad/iPhone จะติด error หรือ exam ไม่เริ่ม  
+**แก้**:
+```typescript
+const enterFullscreen = async () => {
+  const el = document.documentElement as any;
+  if (el.requestFullscreen) {
+    await el.requestFullscreen();
+  } else if (el.webkitRequestFullscreen) {
+    // Safari desktop
+    await el.webkitRequestFullscreen();
+  } else {
+    // iOS Safari — ไม่รองรับ fullscreen API เลย
+    // fallback: แสดง overlay ที่ปิด header/footer ให้ดูเหมือน fullscreen
+    setFakeFullscreen(true);
+  }
+};
+```
+`fakeFullscreen`: ใช้ `position: fixed; inset: 0; z-index: 9999` ครอบ exam content + ซ่อน header  
+ยังนับ "ออก fullscreen" โดย track `visibilitychange` event แทน `fullscreenchange`
+
+---
+
+### V2 — Exam Auto-Submit เมื่อครู Force-Close
+**ไฟล์**: [src/pages/ExamRoom.tsx](src/pages/ExamRoom.tsx), [src/pages/PrePostTestRoom.tsx](src/pages/PrePostTestRoom.tsx)  
+**ปัญหา**: ครูปิด exam (`isOpen = false`) ขณะนักเรียนกำลังสอบอยู่ — นักเรียนยังสอบต่อได้โดยไม่รู้ว่าหมดเวลา และผลไม่ถูกส่ง  
+**แก้**: เพิ่ม `onSnapshot` บน exam doc ระหว่างสอบ:
+```typescript
+useEffect(() => {
+  const unsub = onSnapshot(examRef, (snap) => {
+    if (!snap.data()?.isOpen && phase === 'typing') {
+      // ครูปิดสอบ — auto-submit ทันที
+      handleSubmit({ forcedClose: true });
+    }
+  });
+  return unsub;
+}, [phase]);
+```
+หลัง submit: แสดง toast "ครูปิดการสอบแล้ว — ผลของคุณถูกบันทึกแล้ว"
+
+---
+
+## ลำดับการทำงาน (Sprint UX)
+
+### Sprint UX-0 — Foundation & Infrastructure ✅ เสร็จแล้ว (2026-05-22)
+> Blocker ของทุกอย่างอื่น — ต้องเสร็จก่อนเริ่ม Sprint ถัดไป
+
+- [x] **W1** — Error Boundary ครอบทุก route ✅ (มีอยู่แล้วก่อน sprint นี้)
+- [x] **Y1** — สร้าง Firestore composite indexes `firestore.indexes.json` ✅ (5 indexes: members, results, sessions, classrooms, prePostTests)
+- [x] **F2** — ติดตั้ง `sonner` + วาง `<Toaster>` ใน main.tsx ✅
+- [x] **F1** — สร้าง `SkeletonCard` component ✅ (+ `SkeletonStatsGrid`, `SkeletonTableRows`, `SkeletonPage`)
+- [x] **F3** — สร้าง `ConfirmDialog` component ✅ (+ `useConfirmDialog` hook)
+- [x] **W2** — Route-level Lazy Loading + Suspense ✅ (+ vite `manualChunks` สำหรับ Firebase/React vendor)
+- [x] **Y2** — `useSubmitGuard` hook + `debounce` + `withRetry` utilities ✅ (`src/utils/asyncUtils.ts`)
+- [x] **Z1** — Session history subcollection ✅ (`users/{uid}/stats/{levelId}/sessions`) + Firestore rules
+- [x] **SA1** — เพิ่ม `admin` role ใน types.ts + firestore.rules + route guard ✅ (admin เปลี่ยน role student↔teacher ได้, ดู classrooms ทั้งระบบ)
+- [x] **X1** — `toThaiDate()` utility ✅ (`src/utils/dateUtils.ts` — รองรับ Firestore Timestamp, Date, ms, relative)
+- [x] **G1** — `copyToClipboard()` utility ✅ + **X4** `getJoinLink()` ✅ (`src/utils/clipboardUtils.ts`)
+
+### Sprint UX-0b — Security & Research Integrity ✅ เสร็จแล้ว (2026-05-22)
+> งานที่ส่งผลต่อ anti-cheat และความน่าเชื่อถือของข้อมูลวิจัย
+
+- [x] **P2** — Research data lock (`isLocked` อัตโนมัติเมื่อมีผลแรก — ป้องกันครูแก้ชุดข้อสอบ) ✅
+- [x] **P1** — Multi-tab prevention (`BroadcastChannel` ping/pong ข้าม tab) ✅
+- [x] **V2** — Exam auto-submit เมื่อครู force-close (`onSnapshot` บน `isOpen`) ✅
+- [x] **SA9** — Audit trail: เพิ่ม `openedAt/closedAt/openedBy` บน exam + prePostTest ✅
+- [x] **SA2** — SuperAdmin UI แต่งตั้ง/ถอด Admin (dropdown ใน user table) ✅
+- [x] **R1** — Pre/Post comparison dashboard (tab เปรียบเทียบ O1 vs O2 เคียงกัน + Δ WPM) ✅
+- [x] **R2** — Result published notification ชัดเจนสำหรับนักเรียน (banner สีเขียว) ✅
+- [x] **S2** — ดูผลสอบ/ทดสอบย้อนหลังตัวเอง (modal แสดง WPM/accuracy/คะแนน/ผ่าน) ✅
+- [x] **S6** + **S7** — เพิ่มข้อมูล briefing card (retake ที่เหลือ + assignedSet) ✅
+- [x] **T8** — Practice deadline (เพิ่ม `dueDate` date picker บน LessonManager + แสดงในบัตรบทเรียน) ✅
+- [x] **P6** — `updatedAt` + `updatedBy` บน CustomLesson (auto-inject ใน useClassroom.updateLesson) ✅
+
 ### Sprint UX-1 — Quick Wins (effort น้อย impact มาก)
-- [ ] **U1** — Wrong char highlight แทน line-through
-- [ ] **U2** — เปรียบเทียบ WPM กับครั้งก่อน + Personal Best
-- [ ] **U3** — Progress bar full-width เหนือ textarea
-- [ ] **U4** — ปุ่ม "ถัดไป" / "ลองอีกครั้ง" หลังจบ
-- [ ] **U15** — Smooth number transitions
-- [ ] **A1** — Empty state actionable
-- [ ] **A2** — First-join onboarding card
-- [ ] **B1** — Cursor & extra-char feedback
-- [ ] **D1** — Notification badge บน nav
-- [ ] **E2** — Teacher pinned quick action bar
+> รายการที่เปลี่ยนแปลงชัดเจน ทำได้เร็ว
+
+- [x] **U1** — Wrong char highlight แทน line-through ✅
+- [x] **U2** — เปรียบเทียบ WPM กับครั้งก่อน + Personal Best ✅
+- [x] **U3** — Progress bar full-width เหนือ textarea ✅
+- [x] **U4** — ปุ่ม "ถัดไป" / "ลองอีกครั้ง" หลังจบ ✅
+- [x] **U15** — Smooth number transitions (WPM, accuracy) ✅ (rAF ease-out cubic)
+- [x] **A1** — Empty state actionable ✅ (TeacherPage + StudentClassroomPage มี next step อยู่แล้ว)
+- [x] **A2** — First-join onboarding card ✅ (localStorage flag + dismiss button)
+- [x] **B1** — Cursor & extra-char feedback ✅
+- [x] **D1** — Notification badge บน nav (pending items) ✅ (แดงบนปุ่มห้องเรียน เมื่อมีสอบ/ทดสอบเปิดอยู่)
+- [x] **E2** — Teacher pinned quick action bar ✅ (+ บทเรียน / Pre-Post Test / จำนวนคน)
+- [x] **H1** — ค้นหานักเรียนในตาราง ✅
+- [x] **H3** — Duplicate lesson/exam ✅
+- [x] **H6** — เรียงลำดับ lesson (↑ ↓) ✅ (order field + swap ใน LessonManager)
+- [x] **P3** — Join code regeneration (ปุ่ม 🔄 ออก code ใหม่) ✅
+- [x] **P4** — Lesson text preview ก่อน save ✅
+- [x] **P5** — Export member list CSV ✅
+- [x] **Z2** — Auto-number students ✅
+- [x] **SA3** — ค้นหา user ใน AdminDashboard ✅ (filter name/email/role มีอยู่แล้ว)
+- [x] **SA8** — System-wide stats header ✅ (role breakdown + active users strip)
+- [ ] **S4** — แสดงว่าครั้งไหน "นับ" ต่อ requiredPlayCount (ต้องมี Z1 ก่อน)
+- [x] **S5** — Leave classroom ✅ (ปุ่ม "ออกจากห้อง" มีอยู่แล้ว)
+- [x] **X1** — Thai date format พ.ศ. ✅ (toThaiDate() ทำใน Sprint UX-0)
 
 ### Sprint UX-2 — Interaction Polish
-- [ ] **U5** — Shake animation เมื่อพิมพ์ผิด
-- [ ] **U6** — Pre-exam briefing card
-- [ ] **U7** — Lesson card states แยกชัดเจน
-- [ ] **U10** — Unified Action Hub (pending items)
-- [ ] **U14** — Font size control
-- [ ] **B2** — Live stats smoothing
-- [ ] **B3** — Red border flash
-- [ ] **C1** — Enhanced result card (top errors)
-- [ ] **U12** — Quick stats header ในห้องครู
+> เพิ่ม layer การตอบสนองและ workflow ของครู/นักเรียน
 
-### Sprint UX-3 — Visual Depth & Redesign
-- [ ] **E1** — Teacher full-width dashboard layout (restructure ใหญ่)
-- [ ] **U8** — Live WPM Sparkline
-- [ ] **U9** — Keyboard finger zone colors
-- [ ] **U11** — Countdown ring timer
-- [ ] **U13** — WPM History Chart (Dashboard)
-- [ ] Theme system redesign (Light default + OS auto-detect + accent color picker)
-- [ ] Focus Mode implementation (fade UI เมื่อ focus ช่องพิมพ์)
+- [x] **U5** — Shake animation เมื่อพิมพ์ผิด ✅ (rAF 0.25s ใน TypingArea + CSS keyframe)
+- [x] **U6** — Pre-exam briefing card ✅ (มีอยู่แล้วใน ExamRoom + PrePostTestRoom พร้อม S6/S7)
+- [x] **U7** — Lesson card states แยกชัดเจน 4 แบบ ✅ (notStarted/inProgress/completed/noReq + badge ✅)
+- [x] **U10** — Unified Action Hub ✅ (3 banners รวมเป็น 1 hub สีเหลืองใน StudentClassroomPage)
+- [x] **U12** — Quick stats header ในห้องครู ✅ (members + lessons + joinCode strip)
+- [x] **U14** — Font size control ใน TypingArea ✅ (A− / A+ buttons + localStorage preset)
+- [x] **B2** — Live stats smoothing ✅ (WPM อัปเดตทุก 3 วิผ่าน interval + accuracy mini bar ใน StatsDisplay)
+- [x] **B3** — Red border flash เมื่อพิมพ์ผิด 3 ครั้งติดกัน ✅ (consecutiveErrRef ใน TypingArea)
+- [x] **C1** — Enhanced result card (top 3 อักษรที่พิมพ์ผิดบ่อย) ✅ (errorCharFreqRef ใน useTypingGame + chips ใน GameResults)
+- [x] **H2** — Drill-down: กดชื่อนักเรียน → ดูสถิติรายคน ✅ (modal แสดงสถิติรายบทเรียนของนักเรียน)
+- [x] **H4** — Auto-close exam ตามวันที่/เวลา ✅ (datetime-local input ใน ExamCreate/PrePostTestCreate + closeAt timer enforcement ใน ExamRoom/PrePostTestRoom)
+- [x] **H5** — แสดงนักเรียนที่ยังไม่ join ห้อง ✅ (importMembers คืน skipped emails + แสดงใน CSVImportPanel)
+- [x] **H7** — Export PDF รายงาน ✅ (window.open + print-friendly HTML report พร้อม stats ทุกบทเรียน)
+- [x] **SA4** — Deactivate account ✅ (toggle isDeactivated ใน AdminDashboard + enforce signOut ใน useAuth onSnapshot)
+- [x] **SA5** — Tab "ห้องเรียน" ทั้งระบบ ใน AdminDashboard ✅ (classrooms tab + onSnapshot โหลดทุกห้องในระบบ + ตารางรายชื่อ)
+- [x] **SA6** — Drill-down เข้าดูข้อมูลในห้อง ✅ (คลิก classroom → modal แสดง members list)
+- [x] **SA7** — ย้าย classroom ไปครูคนอื่น ✅ (dropdown เลือกครูใหม่ + update Firestore + classroomIds ทั้งครูเก่า/ใหม่)
+- [x] **S1** — หลายห้องเรียน + dropdown สลับ ✅ (auto-select ห้องแรก + dropdown switcher ใน detail panel header)
+- [x] **S3** — Resume กลางสอบ ✅ (localStorage draft — save startedAt on start, compute remaining on load, timeLimitOverride → useTypingGame, banner "ต่อจากเดิม/เริ่มใหม่", clear on submit — ExamRoom + PrePostTestRoom)
+- [x] **V1** — iOS Safari fullscreen fallback ✅ (check document.fullscreenEnabled — ข้ามการขอ fullscreen + ไม่นับ exit + แสดงข้อความแทน)
+- [x] **X2** — Session timeout modal กลางสอบ ✅ (ProtectedRoute isExamRoute — modal sign-in แทน redirect)
+
+### Sprint UX-3 — Visual Depth & Redesign (breaking changes — branch แยก)
+> Layout และ visual ที่เปลี่ยนใหญ่ — ทำใน git branch แยก
+
+- [x] **U8** — Live WPM Sparkline ✅ (wpmHistory ทุก 5s → SVG polyline ข้าง WPM card)
+- [x] **U9** — Keyboard finger zone colors ✅ (fingerZoneColors map → inline style opacity 15% ทุก key ตามนิ้ว)
+- [x] **U11** — Countdown ring timer ✅ (SVG CountdownRing แทน Timer icon ใน StatsDisplay เมื่อมี timeLimit)
+- [x] **U13** — WPM History Chart ✅ (pure SVG polyline จาก stats.lastPlayed ใน 30 วัน → UserDashboard)
+- [x] **E1** — Teacher full-width dashboard ✅ (sidebar → top dropdown selector + auto-select + quick stats strip + full-width tabs)
+- [x] **Focus Mode** ✅ (PracticePage: aside fade opacity 0.08 + pointer-events none เมื่อ textarea focused; Esc เพื่อ unfocus)
+
+### Sprint UX-4 — Advanced Features
+> ใช้เวลา/effort มาก หรือ optional — ทำหลัง sprint หลักเสร็จ
+
+- [x] **T9** — Clone classroom ข้ามเทอม ✅ (cloneClassroom ใน useClassroom — copy lessons only, ปุ่ม Copy ใน TeacherPage actions)
+- [x] **T10** — Live exam oversight ✅ (onSnapshot ใน ExamList results modal — live status สด N/M ส่งแล้ว + progress bar + member list ✅/⬜)
+- [x] **X5** — Classroom archive ✅ (isArchived ใน types + archiveClassroom/unarchiveClassroom ใน useClassroom + Archive button + ส่วน "ห้องที่เก็บถาวร" ใน TeacherPage)
+- [x] **X6** — Leaderboard WPM รายห้อง ✅ (ปุ่ม "ดูกระดานอันดับ" + lesson selector + ranked list ใน StudentClassroomPage)
+- [ ] **X3** — ลบ account ตัวเอง (PDPA — ต้องใช้ Cloud Function)
 
 ---
 
 ## หมายเหตุ
 
-- ทุกรายการใช้ CSS vars ที่มีอยู่แล้ว (`--color-primary`, `--color-accent` ฯลฯ) — theme switch ทำงานได้ทันที
-- ไม่ต้องติดตั้ง library เพิ่ม ยกเว้น U13 (recharts) ถ้าเลือกใช้
-- Sprint UX-1 ทำใน session เดียวได้เกือบทั้งหมด
-- Sprint UX-3 (E1 + Theme + Focus Mode) เป็น breaking change — ควรทำใน branch แยก
+- ทุกรายการใช้ CSS vars ที่มีอยู่แล้ว — theme switch ทำงานได้ทันที
+- Library ที่ต้อง install เพิ่มมีแค่: `sonner` (F2) และ `recharts` ถ้าเลือกใช้ใน U13
+- **Sprint UX-0** ต้องเสร็จก่อน — W1, Y1, F1, F2, F3 เป็น dependency ของทุก sprint
+- **Sprint UX-0b** ต้องเสร็จก่อน UX-1 — P2, P1, V2 ส่งผลต่อความน่าเชื่อถือของข้อมูลวิจัย
+- **Z1** (session history) เป็น prerequisite ของ U2, U13, S4 — ต้องทำใน UX-0 ก่อน sprint ที่ใช้
+- **SA1** (admin role) เป็น prerequisite ของ SA2, SA3, SA4, SA5, SA6, SA7
+- **Sprint UX-3** เป็น breaking change ควรทำใน git branch แยก
 
 ---
 
-*อัปเดตแผนนี้เมื่อทำแต่ละรายการเสร็จ — 2026-05-21*
+*อัปเดตแผนนี้เมื่อทำแต่ละรายการเสร็จ — 2026-05-22*

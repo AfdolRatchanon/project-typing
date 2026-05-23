@@ -1,7 +1,7 @@
 // src/components/classroom/ClassroomCard.tsx
 
 import React, { useState } from 'react';
-import { Users, BookOpen, Copy, Check, ChevronRight, Trash2 } from 'lucide-react';
+import { Users, BookOpen, Copy, Check, ChevronRight, Trash2, RefreshCw } from 'lucide-react';
 import type { Classroom } from '../../types/types';
 
 interface Props {
@@ -11,18 +11,28 @@ interface Props {
     isSelected?: boolean;
     onClick?: () => void;
     onDelete?: () => void;
+    onRegenerateCode?: () => Promise<void>;
 }
 
 const ClassroomCard: React.FC<Props> = ({
-    classroom, memberCount, isTeacher, isSelected, onClick, onDelete,
+    classroom, memberCount, isTeacher, isSelected, onClick, onDelete, onRegenerateCode,
 }) => {
     const [copied, setCopied] = useState(false);
+    const [regenerating, setRegenerating] = useState(false);
 
     const copyCode = async (e: React.MouseEvent) => {
         e.stopPropagation();
         await navigator.clipboard.writeText(classroom.joinCode);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const handleRegenerate = async (e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!onRegenerateCode || regenerating) return;
+        if (!confirm('ออก Join Code ใหม่? Code เดิมจะใช้ไม่ได้ทันที')) return;
+        setRegenerating(true);
+        try { await onRegenerateCode(); } finally { setRegenerating(false); }
     };
 
     return (
@@ -86,11 +96,21 @@ const ClassroomCard: React.FC<Props> = ({
                             {classroom.joinCode}
                         </span>
                     </div>
-                    <button onClick={copyCode}
-                        className="p-1.5 rounded-md transition-all hover:opacity-80"
-                        style={{ color: copied ? 'var(--color-success)' : 'var(--color-primary)' }}>
-                        {copied ? <Check size={14} /> : <Copy size={14} />}
-                    </button>
+                    <div className="flex items-center gap-1">
+                        <button onClick={copyCode}
+                            className="p-1.5 rounded-md transition-all hover:opacity-80"
+                            style={{ color: copied ? 'var(--color-success)' : 'var(--color-primary)' }}>
+                            {copied ? <Check size={14} /> : <Copy size={14} />}
+                        </button>
+                        {onRegenerateCode && (
+                            <button onClick={handleRegenerate} disabled={regenerating}
+                                title="ออก Code ใหม่"
+                                className="p-1.5 rounded-md transition-all hover:opacity-80 disabled:opacity-40"
+                                style={{ color: 'var(--color-text-muted)' }}>
+                                <RefreshCw size={13} className={regenerating ? 'animate-spin' : ''} />
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
         </div>

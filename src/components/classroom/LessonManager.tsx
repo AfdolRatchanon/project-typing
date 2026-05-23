@@ -1,7 +1,7 @@
 // src/components/classroom/LessonManager.tsx
 
 import React, { useState, useEffect } from 'react';
-import { PlusCircle, Pencil, Trash2, Clock, AlignLeft, X, Save } from 'lucide-react';
+import { PlusCircle, Pencil, Trash2, Clock, AlignLeft, X, Save, Calendar, Copy, ChevronUp, ChevronDown } from 'lucide-react';
 import type { CustomLesson } from '../../types/types';
 
 interface Props {
@@ -13,7 +13,7 @@ interface Props {
     deleteLesson: (classroomId: string, lessonId: string) => Promise<void>;
 }
 
-const emptyForm = { title: '', text: '', timeLimit: '', requiredPlayCount: '' };
+const emptyForm = { title: '', text: '', timeLimit: '', requiredPlayCount: '', dueDate: '' };
 
 const field: React.CSSProperties = {
     width: '100%', padding: '0.5rem 0.75rem', borderRadius: '0.5rem',
@@ -46,6 +46,7 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
             text: l.text,
             timeLimit: l.timeLimit ? String(l.timeLimit) : '',
             requiredPlayCount: l.requiredPlayCount ? String(l.requiredPlayCount) : '',
+            dueDate: l.dueDate ? new Date(l.dueDate).toISOString().split('T')[0] : '',
         });
         setError('');
         setShowForm(true);
@@ -62,11 +63,13 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
         setSaving(true);
         setError('');
         try {
-            const payload = {
+            const dueDate = form.dueDate ? new Date(form.dueDate).getTime() : null;
+        const payload = {
                 title: form.title.trim(),
                 text: form.text.trim(),
                 timeLimit,
                 requiredPlayCount,
+                dueDate,
             };
             if (editId) {
                 await updateLesson(classroomId, editId, payload);
@@ -85,6 +88,33 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
     const handleDelete = async (lessonId: string) => {
         if (!confirm('ลบบทเรียนนี้?')) return;
         await deleteLesson(classroomId, lessonId);
+        await reload();
+    };
+
+    // H3 — คัดลอกบทเรียน
+    const handleDuplicate = async (l: CustomLesson) => {
+        await createLesson(classroomId, {
+            title: `สำเนา — ${l.title}`,
+            text: l.text,
+            timeLimit: l.timeLimit ?? null,
+            requiredPlayCount: l.requiredPlayCount ?? null,
+            dueDate: l.dueDate ?? null,
+        }, teacherUid);
+        await reload();
+    };
+
+    // H6 — เลื่อนลำดับ ↑ ↓
+    const handleMove = async (index: number, direction: 'up' | 'down') => {
+        const swapIndex = direction === 'up' ? index - 1 : index + 1;
+        if (swapIndex < 0 || swapIndex >= lessons.length) return;
+        const a = lessons[index];
+        const b = lessons[swapIndex];
+        const orderA = a.order ?? index;
+        const orderB = b.order ?? swapIndex;
+        await Promise.all([
+            updateLesson(classroomId, a.lessonId, { order: orderB }),
+            updateLesson(classroomId, b.lessonId, { order: orderA }),
+        ]);
         await reload();
     };
 
@@ -109,7 +139,7 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
                 </div>
             ) : (
                 <div className="flex flex-col gap-2">
-                    {lessons.map((l) => (
+                    {lessons.map((l, index) => (
                         <div key={l.lessonId} className="flex items-start gap-3 p-3 rounded-xl"
                             style={{ background: 'var(--color-primary-light)', border: '1px solid color-mix(in srgb, var(--color-primary) 15%, transparent)' }}>
                             <div className="flex-1 min-w-0">
@@ -127,15 +157,48 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
                                             ฝึกขั้นต่ำ {l.requiredPlayCount} ครั้ง
                                         </span>
                                     )}
+                                    {l.dueDate && (() => {
+                                        const overdue = l.dueDate < Date.now();
+                                        return (
+                                            <span className="inline-flex items-center gap-1 text-xs px-1.5 py-0.5 rounded-full"
+                                                style={{
+                                                    background: overdue
+                                                        ? 'color-mix(in srgb, var(--color-error) 12%, transparent)'
+                                                        : 'color-mix(in srgb, #f97316 12%, transparent)',
+                                                    color: overdue ? 'var(--color-error)' : '#f97316',
+                                                }}>
+                                                <Calendar size={10} />
+                                                ส่งภายใน {new Date(l.dueDate).toLocaleDateString('th-TH')}
+                                                {overdue && ' (เกินกำหนด)'}
+                                            </span>
+                                        );
+                                    })()}
                                 </div>
                             </div>
+                            <div className="flex flex-col gap-0.5 shrink-0">
+                                <button onClick={() => handleMove(index, 'up')} disabled={index === 0} title="เลื่อนขึ้น"
+                                    className="p-1 rounded hover:opacity-80 transition-all disabled:opacity-20"
+                                    style={{ color: 'var(--color-text-muted)' }}>
+                                    <ChevronUp size={13} />
+                                </button>
+                                <button onClick={() => handleMove(index, 'down')} disabled={index === lessons.length - 1} title="เลื่อนลง"
+                                    className="p-1 rounded hover:opacity-80 transition-all disabled:opacity-20"
+                                    style={{ color: 'var(--color-text-muted)' }}>
+                                    <ChevronDown size={13} />
+                                </button>
+                            </div>
                             <div className="flex gap-1 shrink-0">
-                                <button onClick={() => openEdit(l)}
+                                <button onClick={() => openEdit(l)} title="แก้ไข"
                                     className="p-1.5 rounded-lg hover:opacity-80 transition-all"
                                     style={{ color: 'var(--color-primary)' }}>
                                     <Pencil size={14} />
                                 </button>
-                                <button onClick={() => handleDelete(l.lessonId)}
+                                <button onClick={() => handleDuplicate(l)} title="คัดลอก"
+                                    className="p-1.5 rounded-lg hover:opacity-80 transition-all"
+                                    style={{ color: 'var(--color-text-muted)' }}>
+                                    <Copy size={14} />
+                                </button>
+                                <button onClick={() => handleDelete(l.lessonId)} title="ลบ"
                                     className="p-1.5 rounded-lg hover:opacity-80 transition-all"
                                     style={{ color: 'var(--color-error)' }}>
                                     <Trash2 size={14} />
@@ -159,18 +222,32 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
                         </div>
                         <div className="flex flex-col gap-3">
                             <div>
-                                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>ชื่อบทเรียน *</label>
-                                <input style={field} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
+                                <label htmlFor="lesson-title" className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>ชื่อบทเรียน *</label>
+                                <input id="lesson-title" style={field} value={form.title} onChange={e => setForm(p => ({ ...p, title: e.target.value }))}
                                     placeholder="เช่น บทที่ 1 — แถวนิ้วกลาง" />
                             </div>
                             <div>
-                                <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>เนื้อหาที่ให้พิมพ์ *</label>
-                                <textarea style={{ ...field, minHeight: '120px', resize: 'vertical' }}
+                                <label htmlFor="lesson-text" className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>เนื้อหาที่ให้พิมพ์ *</label>
+                                <textarea id="lesson-text" style={{ ...field, minHeight: '120px', resize: 'vertical' }}
                                     value={form.text} onChange={e => setForm(p => ({ ...p, text: e.target.value }))}
                                     placeholder="พิมพ์ข้อความที่ต้องการให้นักเรียนฝึกพิมพ์ที่นี่..." />
                                 <p className="text-xs mt-1" style={{ color: 'var(--color-text-muted)' }}>{form.text.length} ตัวอักษร</p>
+                                {/* P4 — ตัวอย่างใน TypingArea */}
+                                {form.text && (
+                                    <div className="mt-2 p-3 rounded-lg text-sm font-mono leading-relaxed whitespace-pre-wrap"
+                                        style={{
+                                            background: 'var(--color-primary-light)',
+                                            border: '1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)',
+                                            color: 'var(--color-text-muted)',
+                                        }}>
+                                        <span className="text-xs font-sans font-semibold block mb-1" style={{ color: 'var(--color-text-muted)' }}>
+                                            ตัวอย่างใน TypingArea:
+                                        </span>
+                                        {form.text}
+                                    </div>
+                                )}
                             </div>
-                            <div className="flex gap-3">
+                            <div className="flex flex-wrap gap-3">
                                 <div>
                                     <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>เวลาจำกัด (วินาที) — ไม่บังคับ</label>
                                     <input style={{ ...field, width: '160px' }} type="number" min="30"
@@ -182,6 +259,11 @@ const LessonManager: React.FC<Props> = ({ classroomId, teacherUid, getLessons, c
                                     <input style={{ ...field, width: '140px' }} type="number" min="1"
                                         value={form.requiredPlayCount} onChange={e => setForm(p => ({ ...p, requiredPlayCount: e.target.value }))}
                                         placeholder="เช่น 3" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>วันกำหนดส่ง — ไม่บังคับ</label>
+                                    <input style={{ ...field, width: '160px' }} type="date"
+                                        value={form.dueDate} onChange={e => setForm(p => ({ ...p, dueDate: e.target.value }))} />
                                 </div>
                             </div>
                             {error && <p className="text-xs" style={{ color: 'var(--color-error)' }}>{error}</p>}

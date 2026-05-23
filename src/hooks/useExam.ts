@@ -72,8 +72,16 @@ export const useExam = (classroomId: string | null): UseExamReturn => {
         await deleteDoc(doc(db, 'exams', examId));
     };
 
-    const toggleOpen = async (examId: string, isOpen: boolean): Promise<void> => {
-        await updateDoc(doc(db, 'exams', examId), { isOpen });
+    const toggleOpen = async (examId: string, isOpen: boolean, openedByUid?: string): Promise<void> => {
+        // SA9: บันทึก audit trail เมื่อเปิด/ปิดสอบ
+        const patch: Record<string, unknown> = { isOpen };
+        if (isOpen) {
+            patch.openedAt = Date.now();
+            if (openedByUid) patch.openedBy = openedByUid;
+        } else {
+            patch.closedAt = Date.now();
+        }
+        await updateDoc(doc(db, 'exams', examId), patch);
     };
 
     const publishResults = async (examId: string): Promise<void> => {
@@ -127,6 +135,13 @@ export const useExam = (classroomId: string | null): UseExamReturn => {
         }
 
         await setDoc(ref, finalResult);
+
+        // P2: ล็อค exam เมื่อมีผลส่งครั้งแรก — monotonic write (false→true เท่านั้น)
+        const examSnap = await getDoc(doc(db, 'exams', examId));
+        if (examSnap.exists() && !examSnap.data().isLocked) {
+            await updateDoc(doc(db, 'exams', examId), { isLocked: true });
+        }
+
         return finalResult;
     };
 

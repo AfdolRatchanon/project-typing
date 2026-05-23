@@ -20,7 +20,11 @@ interface UseClassroomReturn {
     updateLesson: (classroomId: string, lessonId: string, patch: Partial<CustomLesson>) => Promise<void>;
     deleteLesson: (classroomId: string, lessonId: string) => Promise<void>;
     getLessons: (classroomId: string) => Promise<CustomLesson[]>;
-    importMembers: (classroomId: string, members: { displayName: string; email: string; studentNumber?: number }[]) => Promise<void>;
+    importMembers: (classroomId: string, members: { displayName: string; email: string; studentNumber?: number }[]) => Promise<{ added: number; skipped: string[] }>;
+    regenerateJoinCode: (classroomId: string, oldCode: string) => Promise<string>;
+    cloneClassroom: (sourceId: string, newName: string) => Promise<string>;
+    archiveClassroom: (classroomId: string) => Promise<void>;
+    unarchiveClassroom: (classroomId: string) => Promise<void>;
 }
 
 export const useClassroom = (teacherUid: string | null): UseClassroomReturn => {
@@ -120,7 +124,11 @@ export const useClassroom = (teacherUid: string | null): UseClassroomReturn => {
     };
 
     const updateLesson = async (classroomId: string, lessonId: string, patch: Partial<CustomLesson>): Promise<void> => {
-        await updateDoc(doc(db, 'classrooms', classroomId, 'lessons', lessonId), patch);
+        await updateDoc(doc(db, 'classrooms', classroomId, 'lessons', lessonId), {
+            ...patch,
+            updatedAt: Date.now(),
+            ...(teacherUid ? { updatedBy: teacherUid } : {}),
+        });
     };
 
     const deleteLesson = async (classroomId: string, lessonId: string): Promise<void> => {
@@ -131,13 +139,18 @@ export const useClassroom = (teacherUid: string | null): UseClassroomReturn => {
         const snap = await getDocs(collection(db, 'classrooms', classroomId, 'lessons'));
         return snap.docs
             .map(d => d.data() as CustomLesson)
-            .sort((a, b) => a.createdAt - b.createdAt);
+            .sort((a, b) => {
+                if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+                if (a.order !== undefined) return -1;
+                if (b.order !== undefined) return 1;
+                return a.createdAt - b.createdAt;
+            });
     };
 
-    const importMembers = async (classroomId: string, members: { displayName: string; email: string; studentNumber?: number }[]): Promise<void> => {
+    const importMembers = async (classroomId: string, members: { displayName: string; email: string; studentNumber?: number }[]): Promise<{ added: number; skipped: string[] }> => {
         const classroomSnap = await getDoc(doc(db, 'classrooms', classroomId));
         if (!classroomSnap.exists()) throw new Error('ไม่พบห้องเรียน');
-        if (members.length === 0) return;
+        if (members.length === 0) return { added: 0, skipped: [] };
 
         // Firestore 'in' query รองรับสูงสุด 30 ค่าต่อครั้ง
         const emails = members.map(m => m.email);
@@ -154,6 +167,9 @@ export const useClassroom = (teacherUid: string | null): UseClassroomReturn => {
             });
         }));
 
+        // H5 — track skipped emails (no Firebase account found)
+        const skipped: string[] = members.filter(m => !emailToUser.has(m.email)).map(m => m.email);
+
         await Promise.all(members.map(async (m) => {
             const found = emailToUser.get(m.email);
             if (!found) return;
@@ -168,6 +184,54 @@ export const useClassroom = (teacherUid: string | null): UseClassroomReturn => {
             await setDoc(doc(db, 'classrooms', classroomId, 'members', found.uid), member);
             await updateDoc(doc(db, 'users', found.uid), { classroomIds: arrayUnion(classroomId) });
         }));
+
+        return { added: members.length - skipped.length, skipped };
+    };
+
+    // T9 — Clone classroom (copy lessons only, no members/results/surveys)
+    const cloneClassroom = async (sourceId: string, newName: string): Promise<string> => {
+        const sourceSnap = await getDoc(doc(db, 'classrooms', sourceId));
+        if (!sourceSnap.exists()) throw new Error('ไม่พบห้องเรียนต้นฉบับ');
+        const source = sourceSnap.data() as Classroom;
+        const newId = await createClassroom({
+            name: newName,
+            subject: source.subject,
+            gradeLevel: source.gradeLevel,
+            semester: source.semester,
+            academicYear: source.academicYear,
+            teacherUid: source.teacherUid,
+        });
+        const lessonsSnap = await getDocs(collection(db, 'classrooms', sourceId, 'lessons'));
+        await Promise.all(lessonsSnap.docs.map(async (d) => {
+            const lesson = d.data() as CustomLesson;
+            const newLessonRef = doc(collection(db, 'classrooms', newId, 'lessons'));
+            await setDoc(newLessonRef, { ...lesson, lessonId: newLessonRef.id, classroomId: newId, createdAt: Date.now() });
+        }));
+        return newId;
+    };
+
+    // X5 — Archive / Unarchive classroom
+    const archiveClassroom = async (classroomId: string): Promise<void> => {
+        await updateDoc(doc(db, 'classrooms', classroomId), { isArchived: true });
+    };
+
+    const unarchiveClassroom = async (classroomId: string): Promise<void> => {
+        await updateDoc(doc(db, 'classrooms', classroomId), { isArchived: false });
+    };
+
+    // P3 — ออก join code ใหม่ (ยกเลิก code เดิม)
+    const regenerateJoinCode = async (classroomId: string, oldCode: string): Promise<string> => {
+        let newCode = '';
+        for (let i = 0; i < 10; i++) {
+            const candidate = generateJoinCode();
+            const snap = await getDoc(doc(db, 'joinCodes', candidate));
+            if (!snap.exists()) { newCode = candidate; break; }
+        }
+        if (!newCode) throw new Error('ไม่สามารถสร้างรหัสใหม่ได้');
+        await deleteDoc(doc(db, 'joinCodes', oldCode));
+        await setDoc(doc(db, 'joinCodes', newCode), { classroomId, createdBy: teacherUid, createdAt: Date.now() });
+        await updateDoc(doc(db, 'classrooms', classroomId), { joinCode: newCode });
+        return newCode;
     };
 
     return {
@@ -175,6 +239,7 @@ export const useClassroom = (teacherUid: string | null): UseClassroomReturn => {
         createClassroom, updateClassroom, deleteClassroom,
         getMembers, removeMember,
         createLesson, updateLesson, deleteLesson, getLessons,
-        importMembers,
+        importMembers, regenerateJoinCode,
+        cloneClassroom, archiveClassroom, unarchiveClassroom,
     };
 };

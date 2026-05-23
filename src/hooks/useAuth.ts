@@ -117,10 +117,15 @@ export const useAuth = (currentLevelId: string): AuthState => {
                 setUserRole('student');
             }
 
-            // real-time listener — profile (จับการเปลี่ยน isProfileComplete, role ฯลฯ)
+            // real-time listener — profile (จับการเปลี่ยน isProfileComplete, role, isDeactivated)
             unsubProfile = onSnapshot(doc(db, 'users', currentUser.uid), (snap) => {
                 if (snap.exists()) {
                     const userData = snap.data() as UserProfile;
+                    // SA4 — enforce deactivation in real-time
+                    if (userData.isDeactivated) {
+                        signOut(auth);
+                        return;
+                    }
                     const role = normalizeRole(userData.role);
                     setUserRole(role);
                     setUserProfile({ ...userData, role });

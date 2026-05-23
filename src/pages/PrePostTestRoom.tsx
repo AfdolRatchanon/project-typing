@@ -6,7 +6,7 @@ import { ArrowLeft, AlertTriangle, CheckCircle2, XCircle, Maximize2 } from 'luci
 import { useNavigate, useParams } from 'react-router-dom';
 import type { User as FirebaseUser } from 'firebase/auth';
 import type { PrePostTest, PrePostTestResult, ExamSet } from '../types/types';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase/firebaseConfig';
 import { computeAssignedSet } from '../hooks/usePrePostTest';
 import { useTypingGame } from '../hooks/useTypingGame';
@@ -37,6 +37,30 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
     const startedAtRef = useRef<number>(0);
     const submittedRef = useRef(false);
     const fsExitCountRef = useRef(0);
+    const [tabBlocked, setTabBlocked] = useState(false); // P1
+    const closeAtStatsRef = useRef({ wpm: 0, accuracy: 0, totalErrors: 0, timer: 0 });
+    // S3 — Resume
+    const [hasDraft, setHasDraft] = useState(false);
+    const [resumeRemaining, setResumeRemaining] = useState(0);
+    const [timeLimitOverride, setTimeLimitOverride] = useState<number | undefined>(undefined);
+
+    // P1 — Multi-tab prevention
+    useEffect(() => {
+        if (!testId) return;
+        const channel = new BroadcastChannel(`prepost-${testId}`);
+        channel.postMessage('ping');
+        const timer = setTimeout(() => {
+            channel.onmessage = (e) => {
+                if (e.data === 'ping') channel.postMessage('pong');
+                if (e.data === 'pong') setTabBlocked(true);
+            };
+        }, 100);
+        channel.onmessage = (e) => {
+            if (e.data === 'ping') channel.postMessage('pong');
+            if (e.data === 'pong') setTabBlocked(true);
+        };
+        return () => { clearTimeout(timer); channel.close(); };
+    }, [testId]);
 
     // ─── Load test + student info ───
     useEffect(() => {
@@ -49,6 +73,7 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
             setTest(testData);
 
             if (!testData.isOpen) { setPhase('closed'); return; }
+            if (testData.closeAt && Date.now() > testData.closeAt) { setPhase('closed'); return; }
 
             // นักเรียน: ดึง studentNumber จาก classroom membership
             const memberSnap = await getDoc(
@@ -60,7 +85,23 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
             const setNum = computeAssignedSet(num, user.uid, testId, testData.setAssignmentMethod);
             const found = testData.examSets.find(s => s.setNumber === setNum && s.text.trim());
             const fallback = testData.examSets.find(s => s.text.trim());
-            setAssignedSet(found || fallback || testData.examSets[0]);
+            const foundSet = found || fallback || testData.examSets[0];
+            setAssignedSet(foundSet);
+
+            // S3 — check for resume draft
+            const draftKey = `prepost-draft-${testId}-${user.uid}`;
+            try {
+                const draftStr = localStorage.getItem(draftKey);
+                if (draftStr) {
+                    const d = JSON.parse(draftStr);
+                    if (d.assignedSetNumber === foundSet.setNumber) {
+                        const elapsed = Math.floor((Date.now() - d.startedAt) / 1000);
+                        const remaining = testData.timeLimit - elapsed;
+                        if (remaining > 30) { setResumeRemaining(remaining); setHasDraft(true); }
+                        else localStorage.removeItem(draftKey);
+                    } else { localStorage.removeItem(draftKey); }
+                }
+            } catch { localStorage.removeItem(draftKey); }
 
             // ตรวจผลที่มีอยู่แล้ว
             const resultSnap = await getDoc(doc(db, 'prePostTests', testId, 'results', user.uid));
@@ -73,8 +114,9 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
         })();
     }, [testId, user]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // ─── Fullscreen change listener ───
+    // ─── Fullscreen change listener (V1: skip on browsers that don't support fullscreen) ───
     useEffect(() => {
+        if (!document.fullscreenEnabled) return;
         const handler = () => {
             if (!document.fullscreenElement && phase === 'exam') {
                 fsExitCountRef.current += 1;
@@ -87,6 +129,38 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
         return () => document.removeEventListener('fullscreenchange', handler);
     }, [phase]);
 
+    // V2 — Force-close auto-submit: ครูปิดสอบขณะนักเรียนกำลังพิมพ์
+    useEffect(() => {
+        if (!testId || !user || !test || !assignedSet) return;
+        const unsub = onSnapshot(doc(db, 'prePostTests', testId), (snap) => {
+            if (!snap.exists()) return;
+            if (!snap.data().isOpen && phase === 'exam' && !submittedRef.current) {
+                submittedRef.current = true;
+                setPhase('submitting');
+                (async () => {
+                    if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+                    const { getScore10Point, getGrade } = await import('../utils/scoreUtils');
+                    const score10Point = getScore10Point(wpm, accuracy, totalErrors, `prepost-${testId}`);
+                    const grade = getGrade(wpm, accuracy, totalErrors, `prepost-${testId}`);
+                    const isPassed = score10Point >= test.passingScore && (test.passingWPM === 0 || wpm >= test.passingWPM);
+                    const resultRef = doc(db, 'prePostTests', testId, 'results', user.uid);
+                    const existing = await getDoc(resultRef);
+                    const attemptCount = existing.exists() ? (existing.data().attemptCount || 0) + 1 : 1;
+                    const result: import('../types/types').PrePostTestResult = {
+                        uid: user.uid, wpm, accuracy, totalErrors, score10Point, grade,
+                        assignedSet: assignedSet.setNumber, timeUsed: timer,
+                        startedAt: startedAtRef.current, submittedAt: Date.now(),
+                        attemptCount, isPassed, fullscreenExitCount: fsExitCountRef.current,
+                    };
+                    await setDoc(resultRef, result);
+                    setSubmittedResult(result);
+                    setPhase('submitted');
+                })();
+            }
+        });
+        return () => unsub();
+    }, [phase, testId, user, test, assignedSet]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // ─── useTypingGame ───
     const customLevelId = `prepost-${testId}`;
     const {
@@ -94,7 +168,7 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
         textToType, typedText,
         isStarted, isPaused, isFinished,
         timer, totalErrors,
-        wpm, accuracy, remainingTime, isTimeUp,
+        wpm, accuracy, wpmHistory, remainingTime, isTimeUp,
         nextChar, activeFinger, highlightedKeys, keyboardLanguage,
         isShiftActive, isCapsLockActive, inputRef,
         handleInputChange, handleStartPause,
@@ -102,8 +176,10 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
         currentLevelId: customLevelId,
         user,
         customText: assignedSet?.text ?? '',
-        customTimeLimit: test?.timeLimit,
+        customTimeLimit: timeLimitOverride ?? test?.timeLimit,
     });
+
+    closeAtStatsRef.current = { wpm, accuracy, totalErrors, timer };
 
     // ─── Auto-submit on finish ───
     useEffect(() => {
@@ -144,12 +220,59 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
         })();
     }, [isFinished]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // H4 — Auto-close enforcement by closeAt
+    useEffect(() => {
+        if (!test?.closeAt) return;
+        const triggerClose = () => {
+            if (phase === 'ready' || phase === 'loading') { setPhase('closed'); return; }
+            if (phase !== 'exam' || submittedRef.current || !user || !assignedSet) return;
+            submittedRef.current = true;
+            setPhase('submitting');
+            (async () => {
+                if (document.fullscreenElement) await document.exitFullscreen().catch(() => {});
+                const { wpm: w, accuracy: a, totalErrors: e, timer: t } = closeAtStatsRef.current;
+                const score10Point = getScore10Point(w, a, e, customLevelId);
+                const grade = getGrade(w, a, e, customLevelId);
+                const isPassed = score10Point >= test.passingScore && (test.passingWPM === 0 || w >= test.passingWPM);
+                const resultRef = doc(db, 'prePostTests', testId, 'results', user.uid);
+                const existing = await getDoc(resultRef);
+                const attemptCount = existing.exists() ? (existing.data().attemptCount || 0) + 1 : 1;
+                const result: PrePostTestResult = {
+                    uid: user.uid, wpm: w, accuracy: a, totalErrors: e, score10Point, grade,
+                    assignedSet: assignedSet.setNumber, timeUsed: t,
+                    startedAt: startedAtRef.current, submittedAt: Date.now(),
+                    attemptCount, isPassed, fullscreenExitCount: fsExitCountRef.current,
+                };
+                await setDoc(resultRef, result);
+                setSubmittedResult(result);
+                setPhase('submitted');
+            })();
+        };
+        const delay = test.closeAt - Date.now();
+        if (delay <= 0) { triggerClose(); return; }
+        const tid = setTimeout(triggerClose, delay);
+        return () => clearTimeout(tid);
+    }, [test, phase]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // S3 — clear draft when submitted
+    useEffect(() => {
+        if (phase === 'submitted' && user) {
+            localStorage.removeItem(`prepost-draft-${testId}-${user.uid}`);
+        }
+    }, [phase, testId, user]);
+
     // ─── Start exam ───
     const handleStart = async () => {
-        try {
-            await document.documentElement.requestFullscreen();
-        } catch {
-            // Fullscreen not available — proceed anyway
+        if (document.fullscreenEnabled) {
+            try { await document.documentElement.requestFullscreen(); } catch { /* proceed anyway */ }
+        }
+        // S3 — save draft
+        if (user && assignedSet) {
+            localStorage.setItem(`prepost-draft-${testId}-${user.uid}`, JSON.stringify({
+                testId, uid: user.uid,
+                assignedSetNumber: assignedSet.setNumber,
+                startedAt: Date.now(),
+            }));
         }
         submittedRef.current = false;
         fsExitCountRef.current = 0;
@@ -157,6 +280,13 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
         startedAtRef.current = Date.now();
         setPhase('exam');
         handleStartPause();
+    };
+
+    // S3 — resume with reduced time limit
+    const handleResumeStart = async () => {
+        setTimeLimitOverride(resumeRemaining);
+        setHasDraft(false);
+        await handleStart();
     };
 
     const totalProgress =
@@ -185,6 +315,20 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
                     style={{ background: 'var(--color-primary)', color: '#fff' }}>
                     กลับหน้าห้องเรียน
                 </button>
+            </div>
+        );
+    }
+
+    // P1 — Tab blocked
+    if (tabBlocked) {
+        return (
+            <div className="min-h-screen app-bg flex flex-col items-center justify-center gap-4 p-4">
+                <p className="text-base font-semibold" style={{ color: 'var(--color-error)' }}>
+                    ⚠️ คุณกำลังเปิดการทดสอบในอีก tab หนึ่งอยู่แล้ว
+                </p>
+                <p className="text-sm text-center" style={{ color: 'var(--color-text-muted)' }}>
+                    กรุณาปิด tab นี้และกลับไปที่ tab ที่กำลังสอบอยู่
+                </p>
             </div>
         );
     }
@@ -260,12 +404,49 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
                         </ul>
                     </div>
 
-                    <button
-                        onClick={handleStart}
-                        className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
-                        style={{ background: 'var(--color-primary)' }}>
-                        <Maximize2 size={15} /> เริ่มสอบ
-                    </button>
+                    {hasDraft && (
+                        <div className="mb-4 p-3 rounded-xl flex flex-col gap-2"
+                            style={{
+                                background: 'color-mix(in srgb, var(--color-primary) 8%, transparent)',
+                                border: '1px solid color-mix(in srgb, var(--color-primary) 25%, transparent)',
+                            }}>
+                            <p className="text-xs font-semibold" style={{ color: 'var(--color-primary)' }}>
+                                พบการสอบที่ค้างอยู่ — เหลือเวลา {Math.floor(resumeRemaining / 60)} นาที {resumeRemaining % 60} วินาที
+                            </p>
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleResumeStart}
+                                    className="flex-1 py-2 rounded-lg text-xs font-bold text-white transition-all hover:opacity-90"
+                                    style={{ background: 'var(--color-primary)' }}>
+                                    ต่อจากเดิม
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        localStorage.removeItem(`prepost-draft-${testId}-${user?.uid}`);
+                                        setHasDraft(false);
+                                        setTimeLimitOverride(undefined);
+                                    }}
+                                    className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:opacity-80"
+                                    style={{ background: 'var(--color-border)', color: 'var(--color-text)' }}>
+                                    เริ่มใหม่
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {!document.fullscreenEnabled && (
+                        <p className="text-xs mb-3 text-center" style={{ color: 'var(--color-text-muted)' }}>
+                            เบราว์เซอร์นี้ไม่รองรับโหมดเต็มหน้าจอ — สอบได้ตามปกติ
+                        </p>
+                    )}
+                    {!hasDraft && (
+                        <button
+                            onClick={handleStart}
+                            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                            style={{ background: 'var(--color-primary)' }}>
+                            {document.fullscreenEnabled ? <Maximize2 size={15} /> : null} เริ่มสอบ
+                        </button>
+                    )}
                 </div>
             </div>
         );
@@ -334,6 +515,7 @@ const PrePostTestRoom: React.FC<Props> = ({ user }) => {
                                 totalErrors={totalErrors}
                                 totalProgress={totalProgress}
                                 totalCharsActual={fullTextContent.length}
+                                wpmHistory={wpmHistory}
                             />
                             <TypingArea
                                 textToType={textToType}

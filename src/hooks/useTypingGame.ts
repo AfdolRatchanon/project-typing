@@ -10,7 +10,7 @@ import { segmentText, detectTextLanguage } from '../utils/textUtils';
 import { calculateWPM, calculateAccuracy, getGrade, getScore10Point } from '../utils/scoreUtils';
 // import {getDefaultCriteria} from '../utils/scoreUtils';
 import { db } from '../firebase/firebaseConfig';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { keyToFingerMap } from '../data/keyboardData';
 // import {  fingerNamesDisplay } from '../data/keyboardData';
 
@@ -36,6 +36,7 @@ interface TypingGameState {
   totalTypedChars: number;
   wpm: number;
   accuracy: number;
+  wpmHistory: number[];
   timeLimit: number | null;
   remainingTime: number | null;
   isTimeUp: boolean;
@@ -80,6 +81,7 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
   const [totalTypedChars, setTotalTypedChars] = useState<number>(0);
   const [wpm, setWpm] = useState<number>(0);
   const [accuracy, setAccuracy] = useState<number>(0);
+  const [wpmHistory, setWpmHistory] = useState<number[]>([]);
   const [timeLimit, setTimeLimit] = useState<number | null>(null);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const [isTimeUp, setIsTimeUp] = useState<boolean>(false);
@@ -91,6 +93,13 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
   const [keyboardLanguage, setKeyboardLanguage] = useState<'en' | 'th'>('en');
   const [isShiftActive, setIsShiftActive] = useState<boolean>(false);
   const [isCapsLockActive, setIsCapsLockActive] = useState<boolean>(false);
+
+  // C1 — error character frequency tracking
+  const errorCharFreqRef = useRef<Record<string, number>>({});
+
+  // B2 — live WPM tick counter
+  const liveTickRef = useRef(0);
+  const totalTypedCharsRef = useRef(totalTypedChars);
 
   // Refs for interval and input focus
   const intervalRef = useRef<number | null>(null);
@@ -111,6 +120,7 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
   useEffect(() => { typedTextRef.current = typedText; }, [typedText]);
   useEffect(() => { totalErrorsRef.current = totalErrors; }, [totalErrors]);
   useEffect(() => { totalCorrectCharsRef.current = totalCorrectChars; }, [totalCorrectChars]);
+  useEffect(() => { totalTypedCharsRef.current = totalTypedChars; }, [totalTypedChars]);
   useEffect(() => { timerRef.current = timer; }, [timer]);
   useEffect(() => { currentSegmentIndexRef.current = currentSegmentIndex; }, [currentSegmentIndex]);
   useEffect(() => { segmentsRef.current = segments; }, [segments]);
@@ -179,6 +189,8 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
     try {
       const snap = await getDoc(statsRef);
       const playCount = snap.exists() ? (snap.data().playCount || 0) + 1 : 1;
+
+      // อัปเดต stats doc (latest snapshot — เหมือนเดิม)
       await setDoc(statsRef, {
         wpm: finalWPM,
         accuracy: finalAccuracy,
@@ -187,6 +199,20 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
         score10Point: finalScore10Point,
         lastPlayed: Date.now(),
         playCount,
+      });
+
+      // Z1: เพิ่ม session history — เก็บทุก session แยกกัน
+      // ใช้สำหรับ: U2 (WPM delta), U13 (WPM chart), S4 (นับครั้งที่ผ่าน)
+      const sessionsRef = collection(db, 'users', user.uid, 'stats', currentLevelId, 'sessions');
+      await addDoc(sessionsRef, {
+        uid: user.uid,
+        levelId: currentLevelId,
+        wpm: finalWPM,
+        accuracy: finalAccuracy,
+        totalErrors: finalTotalErrors,
+        grade: finalGrade,
+        score10Point: finalScore10Point,
+        playedAt: serverTimestamp(),
       });
     } catch (error) {
       console.error("Error saving user stats:", error);
@@ -254,9 +280,13 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
     timerRef.current = 0;
     setTotalErrors(0);
     totalErrorsRef.current = 0;
+    errorCharFreqRef.current = {};
+    liveTickRef.current = 0;
+    setWpmHistory([]);
     setTotalCorrectChars(0);
     totalCorrectCharsRef.current = 0;
     setTotalTypedChars(0);
+    totalTypedCharsRef.current = 0;
     setIsStarted(false);
     useStateIsPaused(false);
     isPausedRef.current = false;
@@ -367,6 +397,26 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
           return prevTimer + 1;
         });
 
+        // B2 — update live WPM & accuracy every 3s during play
+        liveTickRef.current += 1;
+        if (liveTickRef.current % 3 === 0 && startTime) {
+          const elapsed = (Date.now() - startTime) / 1000;
+          if (elapsed > 1) {
+            const segCorrect = typedTextRef.current.split('').filter((c, i) => c === textToTypeRef.current[i]).length;
+            const liveCorrect = totalCorrectCharsRef.current + segCorrect;
+            const liveTyped = totalTypedCharsRef.current + typedTextRef.current.length;
+            if (liveTyped > 0) {
+              const liveWpm = calculateWPM(liveCorrect, liveTyped, totalErrorsRef.current, elapsed, 'th');
+              setWpm(liveWpm);
+              setAccuracy(calculateAccuracy(liveCorrect, liveTyped));
+              // U8 — sample WPM into history every 5s
+              if (liveTickRef.current % 5 === 0) {
+                setWpmHistory(prev => [...prev, liveWpm]);
+              }
+            }
+          }
+        }
+
         if (timeLimit !== null) {
           setRemainingTime(prevTime => {
             if (prevTime !== null && prevTime <= 1) {
@@ -466,6 +516,14 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
       const correctCharsInSegment = typedSegment.split('').filter((char, index) => char === textToType[index]).length;
       const actualErrorsInSegment = typedSegment.length - correctCharsInSegment;
 
+      // C1 — accumulate error chars for this segment
+      typedSegment.split('').forEach((char, i) => {
+        if (char !== textToType[i]) {
+          const expected = textToType[i];
+          errorCharFreqRef.current[expected] = (errorCharFreqRef.current[expected] || 0) + 1;
+        }
+      });
+
       const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment + 1; // +1 for the space
       const newTotalTypedChars = totalTypedChars + textToType.length + 1; // Include space
       const newTotalErrors = totalErrors + actualErrorsInSegment;
@@ -518,6 +576,14 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
     if (value.length === textToType.length && currentSegmentIndex === segments.length - 1) {
       const correctCharsInSegment = value.split('').filter((char, index) => char === textToType[index]).length;
       const actualErrorsInSegment = value.length - correctCharsInSegment;
+
+      // C1 — accumulate error chars for last segment
+      value.split('').forEach((char, i) => {
+        if (char !== textToType[i]) {
+          const expected = textToType[i];
+          errorCharFreqRef.current[expected] = (errorCharFreqRef.current[expected] || 0) + 1;
+        }
+      });
 
       const newTotalCorrectChars = totalCorrectChars + correctCharsInSegment;
       const newTotalTypedChars = totalTypedChars + textToType.length;
@@ -581,6 +647,7 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
     totalTypedChars,
     wpm,
     accuracy,
+    wpmHistory,
     timeLimit,
     remainingTime,
     isTimeUp,
@@ -595,5 +662,9 @@ export const useTypingGame = ({ currentLevelId, user, customText, customTimeLimi
     handleStartPause,
     handleResetGame,
     getCurrentLevel,
+    topErrorChars: Object.entries(errorCharFreqRef.current)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 3)
+      .map(([char]) => char),
   };
 };

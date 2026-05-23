@@ -18,6 +18,7 @@ interface GameResultsProps {
     currentLevelId: string;
     user: any; // Firebase User object
     latestUserStats: LevelStats | null;
+    topErrorChars?: string[];
 }
 
 /**
@@ -40,6 +41,7 @@ const GameResults: React.FC<GameResultsProps> = ({
     currentLevelId,
     user,
     latestUserStats,
+    topErrorChars = [],
 }) => {
     if (!isFinished) {
         return null;
@@ -86,6 +88,48 @@ const GameResults: React.FC<GameResultsProps> = ({
                 <p className="text-lg font-semibold text-center mt-2" style={{ color: 'var(--color-text)' }}>
                     คะแนน: <span className="font-bold text-xl" style={{ color: isTimeUp ? 'var(--color-warning)' : 'var(--color-success)' }}>{getScore10Point(wpm, accuracy, totalErrors, currentLevelId)}/10</span>
                 </p>
+
+                {/* C1 — top 3 error chars */}
+                {topErrorChars.length > 0 && (
+                    <div className="mt-3 flex items-center justify-center gap-2 flex-wrap">
+                        <span className="text-xs font-medium" style={{ color: 'var(--color-text-muted)' }}>ตัวอักษรที่พลาดบ่อย:</span>
+                        {topErrorChars.map((char, i) => (
+                            <span key={i} className="inline-flex items-center justify-center w-8 h-8 rounded-lg font-mono font-bold text-base"
+                                style={{
+                                    background: `color-mix(in srgb, var(--color-error) ${20 - i * 4}%, var(--color-surface))`,
+                                    border: '1px solid color-mix(in srgb, var(--color-error) 35%, transparent)',
+                                    color: 'var(--color-error)',
+                                }}>
+                                {char === ' ' ? '␣' : char}
+                            </span>
+                        ))}
+                    </div>
+                )}
+
+                {/* U2 — เปรียบเทียบ WPM กับครั้งก่อน */}
+                {latestUserStats && (
+                    <div className="mt-3 flex items-center justify-center gap-3 flex-wrap">
+                        {wpm > latestUserStats.wpm ? (
+                            <>
+                                <span className="text-sm font-bold px-3 py-1 rounded-full"
+                                    style={{ background: 'color-mix(in srgb, var(--color-success) 15%, transparent)', color: 'var(--color-success)' }}>
+                                    🏆 สถิติใหม่!
+                                </span>
+                                <span className="text-sm font-semibold" style={{ color: 'var(--color-success)' }}>
+                                    ▲ +{wpm - latestUserStats.wpm} WPM จากครั้งก่อน
+                                </span>
+                            </>
+                        ) : wpm < latestUserStats.wpm ? (
+                            <span className="text-sm font-semibold" style={{ color: 'var(--color-text-muted)' }}>
+                                ▼ {wpm - latestUserStats.wpm} WPM จากครั้งก่อน (ครั้งก่อน {latestUserStats.wpm} WPM)
+                            </span>
+                        ) : (
+                            <span className="text-sm" style={{ color: 'var(--color-text-muted)' }}>
+                                = เท่ากับครั้งก่อน ({latestUserStats.wpm} WPM)
+                            </span>
+                        )}
+                    </div>
+                )}
             </div>
 
             {user && latestUserStats && (

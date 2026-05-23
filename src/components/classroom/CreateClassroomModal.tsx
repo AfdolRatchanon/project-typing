@@ -58,13 +58,13 @@ const CreateClassroomModal: React.FC<Props> = ({ teacherUid, onClose, onCreate }
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-3">
                     <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>ชื่อห้องเรียน *</label>
-                        <input style={field} value={form.name} onChange={set_('name')}
+                        <label htmlFor="classroom-name" className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>ชื่อห้องเรียน *</label>
+                        <input id="classroom-name" style={field} value={form.name} onChange={set_('name')}
                             placeholder="เช่น ห้อง ปวช.1/1 สาขาคอมพิวเตอร์ธุรกิจ" />
                     </div>
                     <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>วิชา</label>
-                        <input style={field} value={form.subject} onChange={set_('subject')} />
+                        <label htmlFor="classroom-subject" className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>วิชา</label>
+                        <input id="classroom-subject" style={field} value={form.subject} onChange={set_('subject')} />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div>

@@ -74,6 +74,20 @@ export const keyToFingerMap: KeyToFingerMap = {
     'AltGr': 'rightThumb',
 };
 
+export const fingerZoneColors: Record<string, string> = {
+    leftPinky:   'rgba(239,  68,  68, 0.15)',
+    leftRing:    'rgba(249, 115,  22, 0.15)',
+    leftMiddle:  'rgba(234, 179,   8, 0.15)',
+    leftIndex:   'rgba( 34, 197,  94, 0.15)',
+    leftThumb:   'rgba( 59, 130, 246, 0.15)',
+    thumb:       'rgba( 59, 130, 246, 0.15)',
+    rightThumb:  'rgba( 59, 130, 246, 0.15)',
+    rightIndex:  'rgba( 34, 197,  94, 0.15)',
+    rightMiddle: 'rgba(234, 179,   8, 0.15)',
+    rightRing:   'rgba(249, 115,  22, 0.15)',
+    rightPinky:  'rgba(239,  68,  68, 0.15)',
+};
+
 /**
  * @constant fingerNamesDisplay
  * @description ออบเจ็กต์สำหรับแสดงชื่อนิ้วเป็นภาษาไทย

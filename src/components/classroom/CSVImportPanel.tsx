@@ -7,7 +7,7 @@ import { csvRowToMember } from '../../utils/classroomUtils';
 
 interface Props {
     classroomId: string;
-    onImport: (classroomId: string, members: { displayName: string; email: string; studentNumber?: number }[]) => Promise<void>;
+    onImport: (classroomId: string, members: { displayName: string; email: string; studentNumber?: number }[]) => Promise<{ added: number; skipped: string[] } | void>;
 }
 
 interface ParsedRow { displayName: string; email: string; studentNumber?: number; valid: boolean; reason?: string }
@@ -18,6 +18,7 @@ const CSVImportPanel: React.FC<Props> = ({ classroomId, onImport }) => {
     const [fileName, setFileName] = useState('');
     const [importing, setImporting] = useState(false);
     const [done, setDone] = useState(false);
+    const [importResult, setImportResult] = useState<{ added: number; skipped: string[] } | null>(null);
     const [error, setError] = useState('');
 
     const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -55,12 +56,13 @@ const CSVImportPanel: React.FC<Props> = ({ classroomId, onImport }) => {
         setImporting(true);
         setError('');
         try {
-            await onImport(classroomId, validRows.map(r => ({
+            const result = await onImport(classroomId, validRows.map(r => ({
                 displayName: r.displayName,
                 email: r.email,
                 ...(r.studentNumber !== undefined ? { studentNumber: r.studentNumber } : {}),
             })));
             setDone(true);
+            setImportResult(result && 'added' in result ? result : null);
             setRows([]);
             setFileName('');
         } catch {
@@ -135,7 +137,27 @@ const CSVImportPanel: React.FC<Props> = ({ classroomId, onImport }) => {
             )}
 
             {error && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--color-error)' }}><AlertCircle size={12} />{error}</p>}
-            {done && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--color-success)' }}><CheckCircle size={12} /> นำเข้าสำเร็จ</p>}
+            {done && importResult && (
+                <div className="mt-2">
+                    <p className="text-xs flex items-center gap-1 mb-1.5" style={{ color: 'var(--color-success)' }}>
+                        <CheckCircle size={12} /> เพิ่ม {importResult.added} คน เรียบร้อย
+                    </p>
+                    {/* H5 — show skipped emails */}
+                    {importResult.skipped.length > 0 && (
+                        <div className="p-2.5 rounded-lg" style={{ background: 'color-mix(in srgb, var(--color-warning) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--color-warning) 30%, transparent)' }}>
+                            <p className="text-xs font-semibold mb-1.5 flex items-center gap-1" style={{ color: 'var(--color-warning)' }}>
+                                <AlertCircle size={12} /> ยังไม่ได้ login ({importResult.skipped.length} คน) — ให้นักเรียนเข้าสู่ระบบก่อน
+                            </p>
+                            <div className="flex flex-col gap-0.5">
+                                {importResult.skipped.map(email => (
+                                    <span key={email} className="text-xs font-mono" style={{ color: 'var(--color-text-muted)' }}>{email}</span>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            )}
+            {done && !importResult && <p className="text-xs flex items-center gap-1" style={{ color: 'var(--color-success)' }}><CheckCircle size={12} /> นำเข้าสำเร็จ</p>}
         </div>
     );
 };

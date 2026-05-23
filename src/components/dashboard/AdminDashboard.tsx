@@ -1,13 +1,15 @@
 // src/components/AdminDashboard.tsx
 
 import React, { useState, useEffect } from 'react';
-import { Settings, Users, BarChart, Gamepad2, Loader2, ChevronDown, ChevronUp, ChevronsDown, ChevronsUp, User } from 'lucide-react';
-import { collection, onSnapshot, getDocs } from 'firebase/firestore';
+import { Settings, Users, BarChart, Gamepad2, Loader2, ChevronDown, ChevronUp, ChevronsDown, ChevronsUp, User, School, X, ArrowRightLeft } from 'lucide-react';
+import { collection, onSnapshot, getDocs, doc, updateDoc, arrayRemove, arrayUnion } from 'firebase/firestore';
 import { db } from '../../firebase/firebaseConfig';
 import { languages } from '../../data/data';
 import type {
-    // Language, Unit, Session, 
-    Level
+    // Language, Unit, Session,
+    Level,
+    Classroom,
+    ClassroomMember,
 } from '../../types/types';
 
 // Define interfaces for user data and level stats to ensure type safety
@@ -70,6 +72,96 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
     const [sortColumn, setSortColumn] = useState<string | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
 
+    // SA2 — role change loading state
+    const [updatingRole, setUpdatingRole] = useState<string | null>(null);
+    // SA4 — deactivate state
+    const [updatingDeactivate, setUpdatingDeactivate] = useState<string | null>(null);
+    // SA5 — classrooms tab
+    const [adminTab, setAdminTab] = useState<'users' | 'classrooms'>('users');
+    const [allClassrooms, setAllClassrooms] = useState<Classroom[]>([]);
+    const [classroomsLoading, setClassroomsLoading] = useState(false);
+    // SA6 — drill-down
+    const [drillClassroom, setDrillClassroom] = useState<Classroom | null>(null);
+    const [drillMembers, setDrillMembers] = useState<ClassroomMember[]>([]);
+    const [drillLoading, setDrillLoading] = useState(false);
+    // SA7 — reassign teacher
+    const [reassignTeacherId, setReassignTeacherId] = useState('');
+    const [reassigning, setReassigning] = useState(false);
+
+    const handleToggleDeactivate = async (uid: string, currentlyDeactivated: boolean) => {
+        if (uid === user?.uid) return; // cannot deactivate yourself
+        if (updatingDeactivate) return;
+        const action = currentlyDeactivated ? 'คืนสิทธิ์' : 'ระงับ';
+        if (!confirm(`${action} account ของ user นี้?`)) return;
+        setUpdatingDeactivate(uid);
+        try {
+            await updateDoc(doc(db, 'users', uid), { isDeactivated: !currentlyDeactivated });
+            setAllUsersData(prev => ({
+                ...prev,
+                [uid]: { ...prev[uid], profile: { ...prev[uid].profile, isDeactivated: !currentlyDeactivated } as any },
+            }));
+        } catch (err) {
+            console.error('Deactivate failed:', err);
+        } finally {
+            setUpdatingDeactivate(null);
+        }
+    };
+
+    const handleRoleChange = async (uid: string, newRole: string) => {
+        if (updatingRole) return;
+        setUpdatingRole(uid);
+        try {
+            await updateDoc(doc(db, 'users', uid), { role: newRole });
+            setAllUsersData(prev => ({
+                ...prev,
+                [uid]: { ...prev[uid], profile: { ...prev[uid].profile, role: newRole } },
+            }));
+        } catch (err) {
+            console.error('Role update failed:', err);
+        } finally {
+            setUpdatingRole(null);
+        }
+    };
+
+
+    // SA5 — load all classrooms when tab is active
+    useEffect(() => {
+        if (adminTab !== 'classrooms' || !user || userRole !== 'superAdmin') return;
+        setClassroomsLoading(true);
+        const unsub = onSnapshot(collection(db, 'classrooms'), snap => {
+            setAllClassrooms(snap.docs.map(d => d.data() as Classroom).sort((a, b) => b.createdAt - a.createdAt));
+            setClassroomsLoading(false);
+        }, () => setClassroomsLoading(false));
+        return () => unsub();
+    }, [adminTab, user, userRole]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // SA6 — load drill-down members
+    const handleDrillClassroom = async (classroom: Classroom) => {
+        setDrillClassroom(classroom);
+        setDrillLoading(true);
+        setDrillMembers([]);
+        setReassignTeacherId(classroom.teacherUid);
+        const snap = await getDocs(collection(db, 'classrooms', classroom.classroomId, 'members'));
+        setDrillMembers(snap.docs.map(d => d.data() as ClassroomMember).sort((a, b) => (a.studentNumber ?? 999) - (b.studentNumber ?? 999)));
+        setDrillLoading(false);
+    };
+
+    // SA7 — reassign classroom to another teacher
+    const handleReassignTeacher = async () => {
+        if (!drillClassroom || !reassignTeacherId || reassignTeacherId === drillClassroom.teacherUid) return;
+        if (!confirm('ย้ายห้องเรียนนี้ไปยังครูคนใหม่?')) return;
+        setReassigning(true);
+        try {
+            await updateDoc(doc(db, 'classrooms', drillClassroom.classroomId), { teacherUid: reassignTeacherId });
+            await updateDoc(doc(db, 'users', drillClassroom.teacherUid), { classroomIds: arrayRemove(drillClassroom.classroomId) }).catch(() => {});
+            await updateDoc(doc(db, 'users', reassignTeacherId), { classroomIds: arrayUnion(drillClassroom.classroomId) }).catch(() => {});
+            setDrillClassroom(prev => prev ? { ...prev, teacherUid: reassignTeacherId } : null);
+        } catch {
+            alert('ย้ายครูไม่สำเร็จ');
+        } finally {
+            setReassigning(false);
+        }
+    };
 
     useEffect(() => {
         if (!user || userRole !== 'superAdmin') {
@@ -368,25 +460,64 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
                     </div>
                 </div> */}
 
-                <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b-2 pb-2">
-                    สถิติผู้ใช้ทั้งหมด
-                </h2>
+                {/* SA5 — Admin tab switcher */}
+                <div className="flex gap-2 mb-6 border-b border-gray-200 pb-2">
+                    {([
+                        { key: 'users', label: 'ผู้ใช้', icon: <Users size={14} /> },
+                        { key: 'classrooms', label: 'ห้องเรียน', icon: <School size={14} /> },
+                    ] as const).map(t => (
+                        <button key={t.key} onClick={() => setAdminTab(t.key)}
+                            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${adminTab === t.key ? 'bg-blue-600 text-white shadow' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                            {t.icon}{t.label}
+                        </button>
+                    ))}
+                </div>
 
-                {loading && (
+                {adminTab === 'users' && <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b-2 pb-2">
+                    สถิติผู้ใช้ทั้งหมด
+                </h2>}
+
+                {adminTab === 'users' && loading && (
                     <div className="flex items-center justify-center py-8">
                         <Loader2 className="animate-spin text-blue-500 mr-3" size={24} />
                         <span className="text-blue-500">กำลังโหลดข้อมูลผู้ใช้...</span>
                     </div>
                 )}
 
-                {error && (
+                {adminTab === 'users' && error && (
                     <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
                         <strong className="font-bold">ข้อผิดพลาด:</strong>
                         <span className="block sm:inline"> {error}</span>
                     </div>
                 )}
 
-                {!loading && !error && (
+                {adminTab === 'users' && !loading && !error && (() => {
+                    const total = Object.keys(allUsersData).length;
+                    const roleCounts = Object.values(allUsersData).reduce((acc, u) => {
+                        const r = u.profile.role || 'guest';
+                        acc[r] = (acc[r] || 0) + 1;
+                        return acc;
+                    }, {} as Record<string, number>);
+                    const activeUsers = Object.values(allUsersData).filter(u => Object.keys(u.stats).length > 0).length;
+                    return (
+                        <div className="mb-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                            {[
+                                { label: 'ผู้ใช้ทั้งหมด', value: total, color: 'text-blue-700', bg: 'bg-blue-50 border-blue-200' },
+                                { label: 'student', value: roleCounts['student'] || 0, color: 'text-emerald-700', bg: 'bg-emerald-50 border-emerald-200' },
+                                { label: 'teacher', value: roleCounts['teacher'] || 0, color: 'text-violet-700', bg: 'bg-violet-50 border-violet-200' },
+                                { label: 'admin', value: (roleCounts['admin'] || 0) + (roleCounts['superAdmin'] || 0), color: 'text-red-700', bg: 'bg-red-50 border-red-200' },
+                                { label: 'เคยฝึก', value: activeUsers, color: 'text-amber-700', bg: 'bg-amber-50 border-amber-200' },
+                            ].map(({ label, value, color, bg }) => (
+                                <div key={label} className={`rounded-xl border p-3 text-center ${bg}`}>
+                                    <div className={`text-2xl font-extrabold ${color}`}>{value}</div>
+                                    <div className="text-xs text-gray-500 mt-0.5">{label}</div>
+                                </div>
+                            ))}
+                        </div>
+                    );
+                })()}
+
+                {adminTab === 'users' && !loading && !error && (
                     <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 rounded-xl shadow-md border border-blue-100/50 backdrop-blur-sm">
                         <div className="flex items-center gap-2 mb-4">
                             <div className="p-1.5 bg-blue-500 rounded-lg shadow-sm">
@@ -467,8 +598,11 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
                                         onChange={(e) => setFilterRole(e.target.value)}
                                     >
                                         <option value="all">ทั้งหมด</option>
-                                        <option value="admin">ผู้ดูแลระบบ</option>
-                                        <option value="user">ผู้ใช้</option>
+                                        <option value="superAdmin">superAdmin</option>
+                                        <option value="admin">admin</option>
+                                        <option value="teacher">teacher</option>
+                                        <option value="student">student</option>
+                                        <option value="guest">guest</option>
                                     </select>
                                     <div className="absolute inset-y-0 right-0 flex items-center pr-2.5 pointer-events-none">
                                         <ChevronDown className="w-4 h-4 text-gray-400" />
@@ -511,13 +645,13 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
                     </div>
                 )}
 
-                {!loading && !error && Object.keys(allUsersData).length === 0 && (
+                {adminTab === 'users' && !loading && !error && Object.keys(allUsersData).length === 0 && (
                     <p className="text-gray-600 text-center py-8">
                         ไม่พบข้อมูลผู้ใช้
                     </p>
                 )}
 
-                {!loading && !error && Object.keys(allUsersData).length > 0 && (
+                {adminTab === 'users' && !loading && !error && Object.keys(allUsersData).length > 0 && (
                     <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
                         {/* Header ตาราง */}
                         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200">
@@ -659,18 +793,34 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
                                                                 <span className="truncate max-w-xs">{userData.profile.email || 'ไม่มีอีเมล'}</span>
                                                             </div>
                                                         </td>
-                                                        <td className="px-6 py-5 whitespace-nowrap text-sm">
-                                                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${userData.profile.role === 'admin'
-                                                                ? 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800 ring-1 ring-purple-300'
-                                                                : 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 ring-1 ring-green-300'
+                                                        <td className="px-6 py-5 whitespace-nowrap text-sm" onClick={e => e.stopPropagation()}>
+                                                            {userRole === 'superAdmin' && userData.profile.role !== 'superAdmin' ? (
+                                                                <select
+                                                                    value={userData.profile.role}
+                                                                    disabled={updatingRole === uid}
+                                                                    onChange={e => handleRoleChange(uid, e.target.value)}
+                                                                    className="border border-gray-200 rounded-lg text-xs px-2 py-1.5 bg-white focus:border-indigo-400 focus:ring-1 focus:ring-indigo-300 cursor-pointer disabled:opacity-50"
+                                                                >
+                                                                    <option value="guest">guest</option>
+                                                                    <option value="student">student</option>
+                                                                    <option value="teacher">teacher</option>
+                                                                    <option value="admin">admin</option>
+                                                                </select>
+                                                            ) : (
+                                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                                                    userData.profile.role === 'superAdmin' ? 'bg-gradient-to-r from-yellow-100 to-amber-200 text-amber-800 ring-1 ring-amber-300'
+                                                                    : userData.profile.role === 'admin' ? 'bg-gradient-to-r from-purple-100 to-purple-200 text-purple-800 ring-1 ring-purple-300'
+                                                                    : userData.profile.role === 'teacher' ? 'bg-gradient-to-r from-blue-100 to-blue-200 text-blue-800 ring-1 ring-blue-300'
+                                                                    : 'bg-gradient-to-r from-green-100 to-green-200 text-green-800 ring-1 ring-green-300'
                                                                 }`}>
-                                                                {userData.profile.role === 'admin' ? (
-                                                                    <Settings className="w-3 h-3 mr-1" />
-                                                                ) : (
-                                                                    <User className="w-3 h-3 mr-1" />
-                                                                )}
-                                                                {userData.profile.role}
-                                                            </span>
+                                                                    {userData.profile.role === 'admin' || userData.profile.role === 'superAdmin' ? (
+                                                                        <Settings className="w-3 h-3 mr-1" />
+                                                                    ) : (
+                                                                        <User className="w-3 h-3 mr-1" />
+                                                                    )}
+                                                                    {userData.profile.role}
+                                                                </span>
+                                                            )}
                                                         </td>
                                                         <td className="px-6 py-5 whitespace-nowrap text-sm">
                                                             <div className="flex items-center">
@@ -733,6 +883,19 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
                                                                     <div className="text-xs text-gray-400">{new Date(userData.profile.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</div>
                                                                 </div>
                                                             </div>
+                                                        </td>
+                                                        {/* SA4 — deactivate toggle */}
+                                                        <td className="px-4 py-5 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                                            {userData.profile.role !== 'superAdmin' && uid !== user?.uid && (
+                                                                <button
+                                                                    onClick={() => handleToggleDeactivate(uid, !!(userData.profile as any).isDeactivated)}
+                                                                    disabled={updatingDeactivate === uid}
+                                                                    className={`text-xs px-2.5 py-1.5 rounded-lg font-medium transition-all disabled:opacity-50 ${(userData.profile as any).isDeactivated
+                                                                        ? 'bg-green-100 text-green-700 hover:bg-green-200'
+                                                                        : 'bg-red-100 text-red-700 hover:bg-red-200'}`}>
+                                                                    {(userData.profile as any).isDeactivated ? 'คืนสิทธิ์' : 'ระงับ'}
+                                                                </button>
+                                                            )}
                                                         </td>
                                                     </tr>
                                                     {expandedUser === uid && (
@@ -916,6 +1079,138 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ user, userRole, setShow
                             </table>
                         </div>
                     </div>
+                )}
+
+                {/* SA5 — Classrooms tab */}
+                {adminTab === 'classrooms' && (
+                    <>
+                        {classroomsLoading ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="animate-spin text-blue-500 mr-3" size={24} />
+                                <span className="text-blue-500">กำลังโหลดห้องเรียน...</span>
+                            </div>
+                        ) : allClassrooms.length === 0 ? (
+                            <p className="text-gray-500 text-center py-8">ไม่มีห้องเรียนในระบบ</p>
+                        ) : (
+                            <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                                <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                                    <School className="w-5 h-5 text-blue-500" />
+                                    <h3 className="text-lg font-semibold text-gray-800">
+                                        ห้องเรียนทั้งหมด
+                                        <span className="ml-2 px-2 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">{allClassrooms.length} ห้อง</span>
+                                    </h3>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full divide-y divide-gray-200">
+                                        <thead className="bg-gradient-to-r from-blue-50 to-indigo-50">
+                                            <tr>
+                                                {['ห้องเรียน', 'ครูผู้สอน', 'วิชา / ระดับ', 'ภาค/ปี', 'Join Code', 'สถานะ'].map(h => (
+                                                    <th key={h} className="px-4 py-3 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">{h}</th>
+                                                ))}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="bg-white divide-y divide-gray-100">
+                                            {allClassrooms.map(c => {
+                                                const teacher = allUsersData[c.teacherUid]?.profile;
+                                                return (
+                                                    <tr key={c.classroomId}
+                                                        className="hover:bg-blue-50 cursor-pointer transition-colors"
+                                                        onClick={() => handleDrillClassroom(c)}>
+                                                        <td className="px-4 py-3 text-sm font-semibold text-gray-900">{c.name}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{teacher?.displayName ?? c.teacherUid.slice(0, 8)}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{c.subject} · {c.gradeLevel}</td>
+                                                        <td className="px-4 py-3 text-sm text-gray-600">{c.semester}/{c.academicYear}</td>
+                                                        <td className="px-4 py-3 text-sm font-mono text-gray-700">{c.joinCode}</td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${c.isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                                                                {c.isActive ? 'ใช้งาน' : 'ปิด'}
+                                                            </span>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SA6+SA7 — Drill-down modal */}
+                        {drillClassroom && (
+                            <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setDrillClassroom(null)}>
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col"
+                                    onClick={e => e.stopPropagation()}>
+                                    <div className="flex items-center justify-between p-5 border-b border-gray-200">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-gray-900">{drillClassroom.name}</h3>
+                                            <p className="text-xs text-gray-500 mt-0.5">{drillClassroom.subject} · {drillClassroom.gradeLevel} · {drillClassroom.semester}/{drillClassroom.academicYear}</p>
+                                        </div>
+                                        <button onClick={() => setDrillClassroom(null)} className="text-gray-400 hover:text-gray-600">
+                                            <X size={18} />
+                                        </button>
+                                    </div>
+
+                                    {/* SA7 — Reassign teacher */}
+                                    <div className="px-5 pt-4 pb-3 border-b border-gray-100 flex items-end gap-3 flex-wrap">
+                                        <div className="flex-1">
+                                            <label className="text-xs font-semibold text-gray-600 mb-1 block flex items-center gap-1">
+                                                <ArrowRightLeft size={11} /> ครูผู้สอน (SA7 — เปลี่ยนได้)
+                                            </label>
+                                            <select
+                                                className="w-full border border-gray-200 rounded-lg text-sm px-3 py-2 bg-white focus:border-blue-400 focus:ring-1 focus:ring-blue-300"
+                                                value={reassignTeacherId}
+                                                onChange={e => setReassignTeacherId(e.target.value)}>
+                                                {Object.entries(allUsersData)
+                                                    .filter(([, u]) => u.profile.role === 'teacher' || u.profile.role === 'superAdmin' || u.profile.role === 'admin')
+                                                    .map(([uid, u]) => (
+                                                        <option key={uid} value={uid}>{u.profile.displayName || u.profile.email}</option>
+                                                    ))}
+                                            </select>
+                                        </div>
+                                        <button
+                                            onClick={handleReassignTeacher}
+                                            disabled={reassigning || reassignTeacherId === drillClassroom.teacherUid}
+                                            className="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all">
+                                            {reassigning ? 'กำลังย้าย...' : 'ย้ายครู'}
+                                        </button>
+                                    </div>
+
+                                    {/* SA6 — Members list */}
+                                    <div className="overflow-y-auto flex-1 p-5">
+                                        <p className="text-xs font-semibold text-gray-600 mb-2 uppercase tracking-wider">
+                                            สมาชิก ({drillLoading ? '...' : drillMembers.length} คน)
+                                        </p>
+                                        {drillLoading ? (
+                                            <div className="flex justify-center py-6">
+                                                <Loader2 className="animate-spin text-blue-400" size={20} />
+                                            </div>
+                                        ) : drillMembers.length === 0 ? (
+                                            <p className="text-sm text-gray-400 text-center py-4">ยังไม่มีสมาชิก</p>
+                                        ) : (
+                                            <table className="min-w-full text-sm">
+                                                <thead>
+                                                    <tr className="text-left text-xs text-gray-500 border-b border-gray-100">
+                                                        <th className="pb-2 pr-3">เลขที่</th>
+                                                        <th className="pb-2 pr-3">ชื่อ</th>
+                                                        <th className="pb-2">อีเมล</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {drillMembers.map(m => (
+                                                        <tr key={m.uid} className="border-b border-gray-50">
+                                                            <td className="py-1.5 pr-3 text-gray-400 text-xs">{m.studentNumber ?? '—'}</td>
+                                                            <td className="py-1.5 pr-3 font-medium text-gray-800">{m.displayName}</td>
+                                                            <td className="py-1.5 text-gray-500 text-xs">{m.email}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
         </div>

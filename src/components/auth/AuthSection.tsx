@@ -20,6 +20,7 @@ interface AuthSectionProps {
     setShowUserDashboard: (value: boolean) => void;
     onGoToClassroom?: () => void; // navigate to /teacher or /my-classroom
     onGoToProfile?: () => void;   // navigate to /profile
+    pendingClassroomCount?: number; // D1 — pending tests/exams badge
 }
 
 /**
@@ -41,6 +42,7 @@ const AuthSection: React.FC<AuthSectionProps> = ({
     setShowUserDashboard,
     onGoToClassroom,
     onGoToProfile,
+    pendingClassroomCount = 0,
 }) => {
     // State to track if the user's photo failed to load
     const [imageError, setImageError] = useState(false);
@@ -155,10 +157,16 @@ const AuthSection: React.FC<AuthSectionProps> = ({
                                 )}
                                 {onGoToClassroom && (
                                     <button onClick={onGoToClassroom}
-                                        className="flex items-center gap-1.5 font-medium py-1.5 px-3 rounded-lg text-xs transition-all hover:opacity-90 hover:scale-105 text-white"
+                                        className="relative flex items-center gap-1.5 font-medium py-1.5 px-3 rounded-lg text-xs transition-all hover:opacity-90 hover:scale-105 text-white"
                                         style={{ background: (userRole === 'teacher' || userRole === 'superAdmin') ? 'var(--color-primary)' : 'color-mix(in srgb, var(--color-primary) 70%, var(--color-accent))' }}>
                                         <School size={13} />
                                         {(userRole === 'teacher' || userRole === 'superAdmin') ? 'จัดการห้อง' : 'ห้องเรียน'}
+                                        {pendingClassroomCount > 0 && (
+                                            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] flex items-center justify-center rounded-full text-white text-[10px] font-bold px-1"
+                                                style={{ background: 'var(--color-error)' }}>
+                                                {pendingClassroomCount > 9 ? '9+' : pendingClassroomCount}
+                                            </span>
+                                        )}
                                     </button>
                                 )}
                                 <button onClick={toggleUserDashboard}

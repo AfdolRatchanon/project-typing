@@ -353,6 +353,68 @@ const UserDashboard: React.FC<UserDashboardProps> = ({ user, setShowUserDashboar
                             </div>
                         </div>
 
+                        {/* U13 — WPM History Chart */}
+                        {(() => {
+                            const thirtyDaysAgo = Date.now() - 30 * 24 * 3600 * 1000;
+                            const dayMap: Record<string, { total: number; count: number; ts: number }> = {};
+                            Object.values(userData.stats).forEach(s => {
+                                if (!s.lastPlayed || s.lastPlayed < thirtyDaysAgo) return;
+                                const d = new Date(s.lastPlayed);
+                                const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+                                if (!dayMap[key]) dayMap[key] = { total: 0, count: 0, ts: s.lastPlayed };
+                                dayMap[key].total += s.wpm;
+                                dayMap[key].count += 1;
+                            });
+                            const chartData = Object.entries(dayMap)
+                                .map(([key, { total, count, ts }]) => ({
+                                    key, wpm: Math.round(total / count), ts,
+                                    label: new Date(ts).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' }),
+                                }))
+                                .sort((a, b) => a.key.localeCompare(b.key));
+                            if (chartData.length < 2) return null;
+                            const W = 300, H = 80;
+                            const maxWpm = Math.max(...chartData.map(d => d.wpm), 1);
+                            const minWpm = Math.min(...chartData.map(d => d.wpm));
+                            const range = maxWpm - minWpm || 1;
+                            const toXY = (d: typeof chartData[0], i: number) => {
+                                const x = (i / (chartData.length - 1)) * (W - 20) + 10;
+                                const y = H - 12 - ((d.wpm - minWpm) / range) * (H - 30);
+                                return { x, y };
+                            };
+                            const pts = chartData.map((d, i) => { const { x, y } = toXY(d, i); return `${x},${y}`; }).join(' ');
+                            return (
+                                <div className="mb-8">
+                                    <h2 className="text-xl font-bold text-gray-800 mb-4 border-b-2 pb-2 text-left flex items-center gap-2">
+                                        <LineChart className="w-5 h-5 text-blue-500" />
+                                        WPM ใน 30 วันที่ผ่านมา
+                                    </h2>
+                                    <div className="bg-gray-50 rounded-xl border border-gray-100 p-4">
+                                        <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                                            <span>{chartData[0].label}</span>
+                                            <span className="font-bold text-green-600">{maxWpm} WPM สูงสุด</span>
+                                            <span>{chartData[chartData.length - 1].label}</span>
+                                        </div>
+                                        <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="overflow-visible">
+                                            <defs>
+                                                <linearGradient id="wpmGrad" x1="0" y1="0" x2="1" y2="0">
+                                                    <stop offset="0%" stopColor="#3b82f6" />
+                                                    <stop offset="100%" stopColor="#8b5cf6" />
+                                                </linearGradient>
+                                            </defs>
+                                            <polyline points={pts} fill="none" stroke="url(#wpmGrad)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+                                            {chartData.map((d, i) => {
+                                                const { x, y } = toXY(d, i);
+                                                return <circle key={i} cx={x} cy={y} r="3.5" fill="url(#wpmGrad)" />;
+                                            })}
+                                            <text x="10" y={H - 12 - ((maxWpm - minWpm) / range) * (H - 30) - 6} fontSize="9" fill="#6b7280">{maxWpm}</text>
+                                            <text x="10" y={H - 3} fontSize="9" fill="#6b7280">{minWpm}</text>
+                                        </svg>
+                                        <p className="text-xs text-gray-400 text-right mt-1">เฉลี่ย WPM ต่อวัน ({chartData.length} วัน)</p>
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
                         {/* Detailed Stats Section */}
                         <h2 className="text-2xl font-bold text-gray-800 mb-6 border-b-2 pb-2 text-left flex items-center gap-2">
                             <Settings className="w-6 h-6 text-blue-500" />

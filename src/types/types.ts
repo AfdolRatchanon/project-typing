@@ -2,7 +2,7 @@
 // Role System
 // ============================================================
 
-export type UserRole = 'student' | 'teacher' | 'superAdmin';
+export type UserRole = 'student' | 'teacher' | 'admin' | 'superAdmin';
 
 export interface UserProfile {
   uid: string;
@@ -16,6 +16,7 @@ export interface UserProfile {
   studentId?: string;
   classroomIds?: string[];
   isProfileComplete: boolean;
+  isDeactivated?: boolean; // SA4 — admin can deactivate account
   createdAt: number;
   lastPhotoUpdate?: number;
 }
@@ -124,6 +125,7 @@ export interface Classroom {
   teacherUid: string;
   createdAt: number;
   isActive: boolean;
+  isArchived?: boolean; // X5 — archived classrooms hidden from main view
 }
 
 export interface ClassroomMember {
@@ -141,9 +143,13 @@ export interface CustomLesson {
   text: string;
   timeLimit: number | null;
   requiredPlayCount?: number | null; // จำนวนครั้งขั้นต่ำที่ต้องฝึก (null = ไม่บังคับ)
+  dueDate?: number | null;           // T8 — deadline (ms timestamp)
+  order?: number;                    // H6 — sort order (lower = higher in list)
   classroomId: string;
   createdBy: string; // teacherUid
   createdAt: number;
+  updatedAt?: number;                // P6 — last edit timestamp
+  updatedBy?: string;                // P6 — uid ของผู้แก้ล่าสุด
 }
 
 export interface ClassroomLevelStats {
@@ -185,8 +191,12 @@ export interface PrePostTest {
   createdBy: string;
   createdAt: number;
   isOpen: boolean;
-  openAt: number | null;
-  closeAt: number | null;
+  openAt: number | null;   // scheduled auto-open time
+  closeAt: number | null;  // scheduled auto-close time
+  openedAt?: number;       // SA9 — actual time teacher clicked open
+  closedAt?: number;       // SA9 — actual time teacher clicked close
+  openedBy?: string;       // SA9 — uid ของครูที่เปิด
+  isLocked?: boolean;      // P2 — locked when first result submitted
   allowRetake: boolean;
   isResultPublished: boolean;
 }
@@ -278,8 +288,12 @@ export interface Exam {
   createdBy: string;
   createdAt: number;
   isOpen: boolean;
-  openAt: number | null;
-  closeAt: number | null;
+  openAt: number | null;   // scheduled auto-open time
+  closeAt: number | null;  // scheduled auto-close time
+  openedAt?: number;       // SA9 — actual time teacher clicked open
+  closedAt?: number;       // SA9 — actual time teacher clicked close
+  openedBy?: string;       // SA9 — uid ของครูที่เปิด
+  isLocked?: boolean;      // P2 — locked when first result submitted
   allowRetake: boolean;
   maxRetake: number;           // 0 = unlimited
   isResultPublished: boolean;
@@ -299,6 +313,7 @@ export interface ExamResult {
   attemptCount: number;
   isPassed: boolean;
   fullscreenExitCount: number;
+  isForceSubmitted?: boolean; // V2 — submitted because teacher force-closed exam
 }
 
 // ============================================================

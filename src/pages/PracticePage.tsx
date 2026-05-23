@@ -1,6 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { Target } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Target, RotateCcw, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, query, where, doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase/firebaseConfig';
 
 import AuthSection from '../components/auth/AuthSection';
 import LevelSelector from '../components/practice/LevelSelector';
@@ -56,13 +58,45 @@ const PracticePage: React.FC<PracticePageProps> = ({
         fullTextContent, segments, currentSegmentIndex,
         textToType, typedText, isStarted, isPaused, isFinished,
         timer, totalErrors, totalCorrectChars, totalTypedChars,
-        wpm, accuracy, timeLimit, remainingTime, isTimeUp,
+        wpm, accuracy, wpmHistory, timeLimit, remainingTime, isTimeUp,
         nextChar, activeFinger, highlightedKeys, keyboardLanguage,
         isShiftActive, isCapsLockActive, inputRef,
         handleInputChange, handleStartPause, handleResetGame, getCurrentLevel,
+        topErrorChars,
     } = useTypingGame({ currentLevelId, user });
 
     const currentLevel = getCurrentLevel();
+
+    // D1 — count pending tests/exams for student classrooms
+    const [pendingClassroomCount, setPendingClassroomCount] = useState(0);
+    useEffect(() => {
+        if (!user || userRole !== 'student') { setPendingClassroomCount(0); return; }
+        let cancelled = false;
+        (async () => {
+            try {
+                const profileSnap = await getDoc(doc(db, 'users', user.uid));
+                const classroomIds: string[] = profileSnap.data()?.classroomIds || [];
+                if (!classroomIds.length) return;
+                let total = 0;
+                await Promise.all(classroomIds.map(async (cid) => {
+                    const [tests, exams] = await Promise.all([
+                        getDocs(query(collection(db, 'prePostTests'), where('classroomId', '==', cid), where('isOpen', '==', true))),
+                        getDocs(query(collection(db, 'exams'), where('classroomId', '==', cid), where('isOpen', '==', true))),
+                    ]);
+                    total += tests.size + exams.size;
+                }));
+                if (!cancelled) setPendingClassroomCount(total);
+            } catch { /* silently ignore */ }
+        })();
+        return () => { cancelled = true; };
+    }, [user, userRole]);
+
+    // U4 — หาด่านถัดไป (flatten all levels in order)
+    const nextLevel = useMemo(() => {
+        const allLevels = languages.flatMap(l => l.units.flatMap(u => u.sessions.flatMap(s => s.levels)));
+        const idx = allLevels.findIndex(l => l.id === currentLevelId);
+        return idx >= 0 && idx < allLevels.length - 1 ? allLevels[idx + 1] : null;
+    }, [currentLevelId]);
 
     // Auto-expand to current level
     useEffect(() => {
@@ -91,11 +125,35 @@ const PracticePage: React.FC<PracticePageProps> = ({
     const completedCharsReal = segments.slice(0, currentSegmentIndex).reduce((acc, seg) => acc + seg.length + 1, 0);
     const totalProgress = completedCharsReal + typedText.length;
 
+    // Focus Mode — fade sidebar when user is actively typing
+    const [isFocused, setIsFocused] = useState(false);
+    useEffect(() => {
+        const el = inputRef.current;
+        if (!el) return;
+        if (document.activeElement === el) setIsFocused(true);
+        const onFocus = () => setIsFocused(true);
+        const onBlur = () => setIsFocused(false);
+        el.addEventListener('focus', onFocus);
+        el.addEventListener('blur', onBlur);
+        return () => { el.removeEventListener('focus', onFocus); el.removeEventListener('blur', onBlur); };
+    }, [inputRef]);
+    useEffect(() => {
+        const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') inputRef.current?.blur(); };
+        window.addEventListener('keydown', onKey);
+        return () => window.removeEventListener('keydown', onKey);
+    }, [inputRef]);
+
     return (
         <div className="min-h-screen flex flex-col lg:flex-row p-2 sm:p-4 font-inter gap-3 lg:gap-6 w-full app-bg">
             {/* ===== เมนูเลือกบทเรียน (ซ้าย) ===== */}
             <aside className="rounded-xl lg:rounded-2xl shadow-2xl shrink-0 w-full lg:w-64 xl:w-72 2xl:w-80 lg:max-h-[90vh] flex flex-col overflow-hidden"
-                style={{ background: 'var(--color-sidebar)', borderLeft: '4px solid var(--color-accent)' }}>
+                style={{
+                    background: 'var(--color-sidebar)',
+                    borderLeft: '4px solid var(--color-accent)',
+                    opacity: isFocused ? 0.08 : 1,
+                    pointerEvents: isFocused ? 'none' : 'auto',
+                    transition: 'opacity 0.2s ease',
+                }}>
                 {/* Header */}
                 <div className="px-4 py-4 flex items-center justify-between"
                     style={{ borderBottom: '1px solid color-mix(in srgb, var(--color-accent) 20%, transparent)' }}>
@@ -125,6 +183,7 @@ const PracticePage: React.FC<PracticePageProps> = ({
                         (userRole === 'teacher' || userRole === 'superAdmin') ? '/teacher' : '/my-classroom'
                     )}
                     onGoToProfile={() => navigate('/profile')}
+                    pendingClassroomCount={pendingClassroomCount}
                 />
 
                 <LevelSelector
@@ -170,7 +229,21 @@ const PracticePage: React.FC<PracticePageProps> = ({
                     timer={timer} timeLimit={timeLimit} remainingTime={remainingTime}
                     wpm={wpm} accuracy={accuracy} totalErrors={totalErrors}
                     totalProgress={totalProgress} totalCharsActual={fullTextContent.length}
+                    wpmHistory={wpmHistory}
                 />
+
+                {/* U3 — Progress bar full-width */}
+                {(isStarted || isFinished) && (
+                    <div className="w-full h-1.5 rounded-full mb-3 overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                        <div
+                            className="h-full rounded-full transition-all duration-300"
+                            style={{
+                                width: `${Math.min(100, (totalProgress / Math.max(1, fullTextContent.length)) * 100)}%`,
+                                background: 'linear-gradient(to right, var(--color-primary), var(--color-accent))',
+                            }}
+                        />
+                    </div>
+                )}
 
                 <TypingArea
                     textToType={textToType} typedText={typedText}
@@ -203,7 +276,28 @@ const PracticePage: React.FC<PracticePageProps> = ({
                     totalCorrectChars={totalCorrectChars} totalTypedChars={totalTypedChars}
                     fullTextContentLength={fullTextContent.length}
                     currentLevelId={currentLevelId} user={user} latestUserStats={latestUserStats}
+                    topErrorChars={topErrorChars}
                 />
+
+                {/* U4 — ปุ่ม "ลองอีกครั้ง" / "ถัดไป" หลังจบ */}
+                {isFinished && (
+                    <div className="flex gap-3 justify-center mt-4">
+                        <button
+                            onClick={handleResetGame}
+                            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:opacity-90"
+                            style={{ background: 'var(--color-border)', color: 'var(--color-text)' }}>
+                            <RotateCcw size={15} /> ลองอีกครั้ง
+                        </button>
+                        {nextLevel && (
+                            <button
+                                onClick={() => { setCurrentLevelId(nextLevel.id); handleResetGame(); }}
+                                className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all hover:opacity-90"
+                                style={{ background: 'var(--color-primary)' }}>
+                                ถัดไป: {nextLevel.name} <ChevronRight size={15} />
+                            </button>
+                        )}
+                    </div>
+                )}
 
                 <LevelScoringCriteria
                     currentLevelId={currentLevelId} timeLimit={timeLimit}

@@ -12,7 +12,22 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report e2e/playwright-report",
+    "test:e2e:b0": "playwright test block0",
+    "test:e2e:b1": "playwright test block1",
+    "test:e2e:b2": "playwright test block2",
+    "test:e2e:b3": "playwright test block3",
+    "test:e2e:b4": "playwright test block4",
+    "test:e2e:b5": "playwright test block5",
+    "test:e2e:b6": "playwright test block6",
+    "test:e2e:b7": "playwright test block7",
+    "test:e2e:b8": "playwright test block8",
+    "test:e2e:b9": "playwright test block9",
+    "test:e2e:b10": "playwright test block10"
   },
   "dependencies": {
     "@tailwindcss/vite": "^4.1.11",
@@ -21,6 +36,7 @@
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.7.1",
+    "sonner": "^2.0.7",
     "tailwindcss": "^4.1.11",
     "xlsx": "^0.18.5"
   },

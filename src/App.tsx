@@ -1,23 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import './App.css';
 
+// Eager load — ใช้บ่อย/เล็ก/ต้องการทันที
 import LandingPage from './pages/LandingPage';
 import PracticePage from './pages/PracticePage';
 import CompleteProfilePage from './pages/CompleteProfilePage';
-import TeacherPage from './pages/TeacherPage';
-import StudentClassroomPage from './pages/StudentClassroomPage';
-import ClassroomPracticePage from './pages/ClassroomPracticePage';
-import PrePostTestRoom from './pages/PrePostTestRoom';
-import ExamRoom from './pages/ExamRoom';
-import SurveyPage from './pages/SurveyPage';
 import ProfilePage from './pages/ProfilePage';
-import UserDashboard from './components/dashboard/UserDashboard';
-import AdminDashboard from './components/dashboard/AdminDashboard';
-import TeacherDashboard from './components/dashboard/TeacherDashboard';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 import ThemeSwitch from './components/shared/ThemeSwitch';
 import ErrorBoundary from './components/shared/ErrorBoundary';
+import { SkeletonPage } from './components/shared/SkeletonCard';
+
+// Lazy load — heavy pages โหลดเมื่อต้องการเท่านั้น
+const TeacherPage          = lazy(() => import('./pages/TeacherPage'));
+const StudentClassroomPage = lazy(() => import('./pages/StudentClassroomPage'));
+const ClassroomPracticePage = lazy(() => import('./pages/ClassroomPracticePage'));
+const PrePostTestRoom      = lazy(() => import('./pages/PrePostTestRoom'));
+const ExamRoom             = lazy(() => import('./pages/ExamRoom'));
+const SurveyPage           = lazy(() => import('./pages/SurveyPage'));
+const UserDashboard        = lazy(() => import('./components/dashboard/UserDashboard'));
+const AdminDashboard       = lazy(() => import('./components/dashboard/AdminDashboard'));
+const TeacherDashboard     = lazy(() => import('./components/dashboard/TeacherDashboard'));
 
 import { useAuth } from './hooks/useAuth';
 import { languages } from './data/data';
@@ -39,6 +43,13 @@ const AppRoutes: React.FC = () => {
     useEffect(() => {
         if (user && isGuestMode) setIsGuestMode(false);
     }, [user]);
+
+    // Dev-only: expose navigate so Playwright can do in-SPA navigation without page reload
+    useEffect(() => {
+        if (import.meta.env.VITE_USE_EMULATOR === 'true') {
+            (window as any).__devNavigate = navigate;
+        }
+    }, [navigate]);
 
     const handleGuestStart = () => {
         setIsGuestMode(true);
@@ -124,9 +135,9 @@ const AppRoutes: React.FC = () => {
                         user={user}
                         userRole={userRole}
                         userProfile={userProfile}
-                        allowedRoles={['teacher', 'superAdmin']}
+                        allowedRoles={['teacher', 'admin', 'superAdmin']}
                     >
-                        {userRole === 'superAdmin'
+                        {(userRole === 'superAdmin' || userRole === 'admin')
                             ? <AdminDashboard user={user} userRole={userRole} setShowAdminDashboard={() => navigate('/practice')} />
                             : <TeacherDashboard user={user} setShowTeacherDashboard={() => navigate('/practice')} />
                         }
@@ -143,7 +154,7 @@ const AppRoutes: React.FC = () => {
                         user={user}
                         userRole={userRole}
                         userProfile={userProfile}
-                        allowedRoles={['teacher', 'superAdmin']}
+                        allowedRoles={['teacher', 'admin', 'superAdmin']}
                     >
                         <TeacherPage user={user} userRole={userRole} />
                     </ProtectedRoute>
@@ -174,7 +185,7 @@ const AppRoutes: React.FC = () => {
             <Route
                 path="/test/:testId"
                 element={
-                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile} isExamRoute>
                         <PrePostTestRoom user={user} />
                     </ProtectedRoute>
                 }
@@ -184,7 +195,7 @@ const AppRoutes: React.FC = () => {
             <Route
                 path="/exam/:examId"
                 element={
-                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile}>
+                    <ProtectedRoute isAuthReady={isAuthReady} user={user} userRole={userRole} userProfile={userProfile} isExamRoute>
                         <ExamRoom user={user} />
                     </ProtectedRoute>
                 }
@@ -217,7 +228,9 @@ const AppRoutes: React.FC = () => {
 
 const App: React.FC = () => (
     <ErrorBoundary>
-        <AppRoutes />
+        <Suspense fallback={<SkeletonPage />}>
+            <AppRoutes />
+        </Suspense>
         <ThemeSwitch />
     </ErrorBoundary>
 );

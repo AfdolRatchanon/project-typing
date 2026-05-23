@@ -1,8 +1,10 @@
 // src/components/exam/ExamList.tsx
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PlusCircle, FileText, X } from 'lucide-react';
 import type { Exam, ExamResult, ClassroomMember, ScorePolicy } from '../../types/types';
+import { onSnapshot, collection } from 'firebase/firestore';
+import { db } from '../../firebase/firebaseConfig';
 import { useExam } from '../../hooks/useExam';
 import ExamCard from './ExamCard';
 import ExamCreate from './ExamCreate';
@@ -32,6 +34,7 @@ const ExamList: React.FC<Props> = ({ classroomId, teacherUid, members }) => {
     const [viewExam, setViewExam] = useState<Exam | null>(null);
     const [viewResults, setViewResults] = useState<Record<string, ExamResult>>({});
     const [loadingResults, setLoadingResults] = useState(false);
+    const resultsUnsubRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         if (exams.length === 0) return;
@@ -45,13 +48,31 @@ const ExamList: React.FC<Props> = ({ classroomId, teacherUid, members }) => {
         })();
     }, [exams.map(e => e.examId).join(',')]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const handleViewResults = async (exam: Exam) => {
+    // T10 — Live oversight: subscribe to results in real-time
+    const handleViewResults = (exam: Exam) => {
+        if (resultsUnsubRef.current) resultsUnsubRef.current();
         setViewExam(exam);
+        setViewResults({});
         setLoadingResults(true);
-        const r = await getExamResults(exam.examId);
-        setViewResults(r);
-        setLoadingResults(false);
+        resultsUnsubRef.current = onSnapshot(
+            collection(db, 'exams', exam.examId, 'results'),
+            (snap) => {
+                const results: Record<string, ExamResult> = {};
+                snap.forEach(d => { results[d.id] = d.data() as ExamResult; });
+                setViewResults(results);
+                setLoadingResults(false);
+            },
+            () => setLoadingResults(false),
+        );
     };
+
+    const handleCloseResults = () => {
+        if (resultsUnsubRef.current) { resultsUnsubRef.current(); resultsUnsubRef.current = null; }
+        setViewExam(null);
+        setViewResults({});
+    };
+
+    useEffect(() => () => { if (resultsUnsubRef.current) resultsUnsubRef.current(); }, []);
 
     const memberByUid = Object.fromEntries(members.map(m => [m.uid, m]));
 
@@ -142,7 +163,7 @@ const ExamList: React.FC<Props> = ({ classroomId, teacherUid, members }) => {
                                         เผยแพร่ผลให้นักเรียน
                                     </button>
                                 )}
-                                <button onClick={() => setViewExam(null)} style={{ color: 'var(--color-text-muted)' }}>
+                                <button onClick={handleCloseResults} style={{ color: 'var(--color-text-muted)' }}>
                                     <X size={18} />
                                 </button>
                             </div>
@@ -150,10 +171,51 @@ const ExamList: React.FC<Props> = ({ classroomId, teacherUid, members }) => {
 
                         {/* Body */}
                         <div className="overflow-y-auto p-4">
+                            {/* T10 — Live member status */}
+                            {(() => {
+                                const submitted = Object.keys(viewResults).length;
+                                const total = members.length;
+                                const pct = total > 0 ? Math.round((submitted / total) * 100) : 0;
+                                return (
+                                    <div className="mb-3 p-3 rounded-xl" style={{ background: 'var(--color-primary-light)' }}>
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-xs font-semibold" style={{ color: 'var(--color-text)' }}>
+                                                สถานะสด · {submitted}/{total} ส่งแล้ว ({pct}%)
+                                            </span>
+                                            <div className="w-24 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--color-border)' }}>
+                                                <div className="h-full rounded-full transition-all duration-300"
+                                                    style={{ width: `${pct}%`, background: 'var(--color-success)' }} />
+                                            </div>
+                                        </div>
+                                        {members.length > 0 && (
+                                            <div className="flex flex-col gap-0.5 max-h-36 overflow-y-auto">
+                                                {[...members]
+                                                    .sort((a, b) => (a.studentNumber ?? 9999) - (b.studentNumber ?? 9999))
+                                                    .map(m => {
+                                                        const r = viewResults[m.uid];
+                                                        return (
+                                                            <div key={m.uid} className="flex items-center justify-between gap-2 py-0.5 text-xs">
+                                                                <span style={{ color: r ? 'var(--color-text)' : 'var(--color-text-muted)' }}>
+                                                                    {r ? '✅' : '⬜'}{m.studentNumber ? ` ${m.studentNumber}.` : ''} {m.displayName}
+                                                                </span>
+                                                                {r && (
+                                                                    <span className="font-bold shrink-0" style={{ color: 'var(--color-success)' }}>
+                                                                        {r.wpm} WPM · {r.score10Point}/10
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    })}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+
                             {loadingResults ? (
                                 <p className="text-sm text-center py-6" style={{ color: 'var(--color-text-muted)' }}>กำลังโหลด...</p>
                             ) : Object.keys(viewResults).length === 0 ? (
-                                <p className="text-sm text-center py-6" style={{ color: 'var(--color-text-muted)' }}>ยังไม่มีนักเรียนส่งผลสอบ</p>
+                                <p className="text-sm text-center py-4" style={{ color: 'var(--color-text-muted)' }}>ยังไม่มีนักเรียนส่งผลสอบ</p>
                             ) : (
                                 <>
                                     {/* Summary */}

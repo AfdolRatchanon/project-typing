@@ -38,6 +38,13 @@ const ExamCreate: React.FC<Props> = ({ classroomId, teacherUid, initial, onClose
     const [allowRetake, setAllowRetake] = useState(initial?.allowRetake ?? false);
     const [maxRetake, setMaxRetake] = useState(String(initial?.maxRetake ?? 0));
     const [examSets, setExamSets] = useState<ExamSet[]>(initial?.examSets ?? defaultSets());
+    const [closeAtStr, setCloseAtStr] = useState(() => {
+        if (initial?.closeAt) {
+            const d = new Date(initial.closeAt);
+            return d.toISOString().slice(0, 16); // "yyyy-MM-ddTHH:mm"
+        }
+        return '';
+    });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
@@ -70,7 +77,7 @@ const ExamCreate: React.FC<Props> = ({ classroomId, teacherUid, initial, onClose
                 createdBy: teacherUid,
                 isOpen: initial?.isOpen ?? false,
                 openAt: null,
-                closeAt: null,
+                closeAt: closeAtStr ? new Date(closeAtStr).getTime() : null,
                 allowRetake,
                 maxRetake: allowRetake ? mr : 0,
                 isResultPublished: initial?.isResultPublished ?? false,
@@ -106,10 +113,11 @@ const ExamCreate: React.FC<Props> = ({ classroomId, teacherUid, initial, onClose
                 <div className="overflow-y-auto p-5 flex flex-col gap-4">
                     {/* Title */}
                     <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
+                        <label htmlFor="exam-title" className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
                             ชื่อการสอบ *
                         </label>
                         <input
+                            id="exam-title"
                             style={field}
                             value={title}
                             onChange={e => setTitle(e.target.value)}
@@ -186,6 +194,19 @@ const ExamCreate: React.FC<Props> = ({ classroomId, teacherUid, initial, onClose
                                 <option value="average">ใช้คะแนนเฉลี่ย</option>
                             </select>
                         </div>
+                    </div>
+
+                    {/* Close at */}
+                    <div>
+                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
+                            ปิดสอบอัตโนมัติ (ไม่บังคับ)
+                        </label>
+                        <input
+                            type="datetime-local"
+                            style={{ ...field, width: '220px' }}
+                            value={closeAtStr}
+                            onChange={e => setCloseAtStr(e.target.value)}
+                        />
                     </div>
 
                     {/* Allow retake */}

@@ -41,6 +41,13 @@ const PrePostTestCreate: React.FC<Props> = ({
     );
     const [allowRetake, setAllowRetake] = useState(initial?.allowRetake ?? false);
     const [examSets, setExamSets] = useState<ExamSet[]>(initial?.examSets ?? defaultSets());
+    const [closeAtStr, setCloseAtStr] = useState(() => {
+        if (initial?.closeAt) {
+            const d = new Date(initial.closeAt);
+            return d.toISOString().slice(0, 16);
+        }
+        return '';
+    });
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState('');
 
@@ -73,7 +80,7 @@ const PrePostTestCreate: React.FC<Props> = ({
                 createdBy: teacherUid,
                 isOpen: initial?.isOpen ?? false,
                 openAt: null,
-                closeAt: null,
+                closeAt: closeAtStr ? new Date(closeAtStr).getTime() : null,
                 allowRetake,
                 isResultPublished: initial?.isResultPublished ?? false,
             });
@@ -108,10 +115,11 @@ const PrePostTestCreate: React.FC<Props> = ({
                 <div className="overflow-y-auto p-5 flex flex-col gap-4">
                     {/* Title */}
                     <div>
-                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
+                        <label htmlFor="prepost-title" className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
                             ชื่อการทดสอบ *
                         </label>
                         <input
+                            id="prepost-title"
                             style={field}
                             value={title}
                             onChange={e => setTitle(e.target.value)}
@@ -191,6 +199,19 @@ const PrePostTestCreate: React.FC<Props> = ({
                                 onChange={e => setPassingWPM(e.target.value)}
                             />
                         </div>
+                    </div>
+
+                    {/* Close at */}
+                    <div>
+                        <label className="text-xs font-medium mb-1 block" style={{ color: 'var(--color-text-muted)' }}>
+                            ปิดสอบอัตโนมัติ (ไม่บังคับ)
+                        </label>
+                        <input
+                            type="datetime-local"
+                            style={{ ...field, width: '220px' }}
+                            value={closeAtStr}
+                            onChange={e => setCloseAtStr(e.target.value)}
+                        />
                     </div>
 
                     {/* Assignment method + allow retake */}

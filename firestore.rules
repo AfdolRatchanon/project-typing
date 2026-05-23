@@ -16,8 +16,21 @@ service cloud.firestore {
       return isAuthenticated() && getUserRole() == 'superAdmin';
     }
 
+    // admin: เปลี่ยน role user, ดูห้องเรียนทั้งระบบ — แต่งตั้ง admin ไม่ได้
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+
+    function isAdminOrAbove() {
+      return isAuthenticated() && (getUserRole() == 'admin' || getUserRole() == 'superAdmin');
+    }
+
     function isTeacherOrAdmin() {
-      return isAuthenticated() && (getUserRole() == 'teacher' || getUserRole() == 'superAdmin');
+      return isAuthenticated() && (
+        getUserRole() == 'teacher' ||
+        getUserRole() == 'admin' ||
+        getUserRole() == 'superAdmin'
+      );
     }
 
     function isClassroomOwner(classroomId) {
@@ -41,19 +54,31 @@ service cloud.firestore {
       // อัปเดต:
       //   - ตัวเอง (แก้ชื่อ/รูป) แต่ห้ามเปลี่ยน role เอง
       //   - superAdmin เปลี่ยนได้ทุกอย่าง
+      //   - admin เปลี่ยน role ได้ แต่ห้าม set เป็น 'admin' หรือ 'superAdmin'
       //   - ครู/admin แก้ได้เฉพาะ classroomIds (CSV import / kick)
       allow update: if (request.auth.uid == uid &&
                         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
                     || isSuperAdmin()
+                    || (isAdmin() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role']) &&
+                        request.resource.data.role in ['student', 'teacher'])
                     || (isTeacherOrAdmin() &&
                         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['classroomIds']));
 
-      allow delete: if isSuperAdmin();
+      // ลบ: superAdmin หรือ admin (SA4 — deactivate user)
+      allow delete: if isAdminOrAbove();
 
       // stats subcollection — สถิติการพิมพ์แต่ละ level
       match /stats/{levelId} {
         allow read: if request.auth.uid == uid || isTeacherOrAdmin();
         allow write: if request.auth.uid == uid;
+
+        // Z1: sessions subcollection — ประวัติรายครั้ง
+        match /sessions/{sessionId} {
+          allow read: if request.auth.uid == uid || isTeacherOrAdmin();
+          allow create: if request.auth.uid == uid;
+          allow update, delete: if false; // ห้ามแก้ไขหรือลบ session history
+        }
       }
 
       // classroomStats subcollection — สถิติบทเรียนห้องเรียน
@@ -108,8 +133,13 @@ service cloud.firestore {
       // สร้าง: ครู/admin เท่านั้น
       allow create: if isTeacherOrAdmin();
 
-      // แก้ไข/ลบ: ผู้สร้างการทดสอบ หรือ superAdmin
-      allow update, delete: if isAuthenticated() && (
+      // P2: ถ้า isLocked=true ห้ามแก้ examSets (ป้องกันครูแก้ชุดข้อสอบหลังมีผลส่งแล้ว)
+      allow update: if isAuthenticated() &&
+          (resource.data.createdBy == request.auth.uid || isSuperAdmin()) &&
+          !(resource.data.isLocked == true &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys().hasAny(['examSets']));
+      allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid || isSuperAdmin()
       );
 
@@ -127,7 +157,13 @@ service cloud.firestore {
     match /exams/{examId} {
       allow read: if isAuthenticated();
       allow create: if isTeacherOrAdmin();
-      allow update, delete: if isAuthenticated() && (
+      // P2: ถ้า isLocked=true ห้ามแก้ examSets (ป้องกันครูแก้ข้อสอบหลังมีผลส่งแล้ว)
+      allow update: if isAuthenticated() &&
+          (resource.data.createdBy == request.auth.uid || isSuperAdmin()) &&
+          !(resource.data.isLocked == true &&
+            request.resource.data.diff(resource.data)
+              .affectedKeys().hasAny(['examSets']));
+      allow delete: if isAuthenticated() && (
         resource.data.createdBy == request.auth.uid || isSuperAdmin()
       );
       match /results/{uid} {

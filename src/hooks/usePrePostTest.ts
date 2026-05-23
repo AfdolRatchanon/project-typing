@@ -87,8 +87,16 @@ export const usePrePostTest = (classroomId: string | null): UsePrePostTestReturn
         await deleteDoc(doc(db, 'prePostTests', testId));
     };
 
-    const toggleOpen = async (testId: string, isOpen: boolean): Promise<void> => {
-        await updateDoc(doc(db, 'prePostTests', testId), { isOpen });
+    const toggleOpen = async (testId: string, isOpen: boolean, openedByUid?: string): Promise<void> => {
+        // SA9: บันทึก audit trail เมื่อเปิด/ปิดทดสอบ
+        const patch: Record<string, unknown> = { isOpen };
+        if (isOpen) {
+            patch.openedAt = Date.now();
+            if (openedByUid) patch.openedBy = openedByUid;
+        } else {
+            patch.closedAt = Date.now();
+        }
+        await updateDoc(doc(db, 'prePostTests', testId), patch);
     };
 
     const publishResults = async (testId: string): Promise<void> => {
@@ -117,6 +125,12 @@ export const usePrePostTest = (classroomId: string | null): UsePrePostTestReturn
         const attemptCount = existing.exists() ? (existing.data().attemptCount || 0) + 1 : 1;
         const full: PrePostTestResult = { ...result, uid, attemptCount };
         await setDoc(ref, full);
+
+        // P2: ล็อค prePostTest เมื่อมีผลส่งครั้งแรก
+        const testSnap = await getDoc(doc(db, 'prePostTests', testId));
+        if (testSnap.exists() && !testSnap.data().isLocked) {
+            await updateDoc(doc(db, 'prePostTests', testId), { isLocked: true });
+        }
         return full;
     };
 
